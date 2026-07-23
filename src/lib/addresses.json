@@ -1,0 +1,11 @@
+{
+  "network": "coston2",
+  "chainId": 114,
+  "rpcUrl": "https://coston2-api.flare.network/ext/C/rpc",
+  "explorerUrl": "https://coston2-explorer.flare.network",
+  "fxrpToken": "0x_DEPLOY_AND_UPDATE",
+  "sealedBidAuction": "0x_DEPLOY_AND_UPDATE",
+  "hushWireVault": "0x_DEPLOY_AND_UPDATE",
+  "fassetSettlement": "0x_DEPLOY_AND_UPDATE",
+  "deployedAt": null
+}
