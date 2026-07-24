@@ -49,8 +49,8 @@ This is **not** a superficial integration. FAssets are the settlement layer. Con
 Everything. This project was built from scratch during Flare Summer Signal:
 
 - `SealedBidAuction.sol` — Commit-reveal sealed-bid auction protocol
-- `HushWireVault.sol` — Escrow vault with enclave-attested settlement execution
-- `FAssetSettlement.sol` — FAsset deposit and cross-chain settlement routing
+- `HushWireVault.sol` — Escrow vault with verifier-gated atomic settlement
+- `IEnclaveVerifier.sol` + `MockEnclaveVerifier.sol` — pluggable attestation gate for Confidential Compute verification
 - `MockFAsset.sol` — FXRP mock for Coston2 testing
 - Next.js dashboard with live settlement view
 - Agent simulator (autonomous negotiation demo)
@@ -96,12 +96,14 @@ Agent A (Buyer)                    Agent B/C (Sellers)
 
 | Contract | Address |
 |----------|---------|
-| MockFAsset (FXRP) | `0x_...` |
-| SealedBidAuction | `0x_...` |
-| HushWireVault | `0x_...` |
-| FAssetSettlement | `0x_...` |
+| MockFAsset (FXRP) | `0xF1E1Db70Af29f78B79F56135685b2De15147cC8A` |
+| SealedBidAuction | `0x9Fd9eD1F017b785cbA44947Df99F4AE4f3945b0a` |
+| HushWireVault | `0xBF9d97a54BA2eB0e559b5012a77550F3dDC3312D` |
+| EnclaveVerifier (MOCK) | `0x088e7FA7271858f5Fb3E029818AC3e5A174aEEcd` |
 
-*(Update after deployment)*
+Deployed: 2026-07-23 · Network: Flare Coston2 (Chain ID 114) · [Explorer](https://coston2-explorer.flare.network)
+
+> ⚠️ The `EnclaveVerifier` is a **mock** that attests every settlement. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier, and replace `MockFAsset` with the real FAsset ERC20.
 
 ---
 

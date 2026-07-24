@@ -2,30 +2,182 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #111827;
-  --accent: #5c7cfa;
+@layer base {
+  :root {
+    --bg-0: #0b0f0e;
+    --bg-1: #101614;
+    --amber: #ffb020;
+    --green: #35d07f;
+    --red: #ff5c5c;
+    --cyan: #4fd1c5;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg-0);
+    color: #eef2ef;
+    font-family: var(--font-plex-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(255, 176, 32, 0.28);
+    color: #fff;
+  }
+
+  /* Console scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0f0e;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #26332e;
+    border: 2px solid #0b0f0e;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #35d07f;
+  }
 }
 
-body {
-  background: var(--bg-primary);
-  color: #e2e8f0;
-  font-family: "Inter", system-ui, sans-serif;
+@layer components {
+  /* Ambient background: grid + radial glow + scanlines */
+  .console-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-color: #0b0f0e;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 176, 32, 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 100%, rgba(79, 209, 197, 0.05), transparent 55%),
+      linear-gradient(rgba(38, 51, 46, 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(38, 51, 46, 0.35) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  }
+
+  /* CRT scanline overlay */
+  .scanlines::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+  }
+
+  /* Console panel — solid, sharp, technical */
+  .panel {
+    background: linear-gradient(180deg, rgba(22, 31, 28, 0.9), rgba(16, 22, 20, 0.9));
+    border: 1px solid #26332e;
+    position: relative;
+  }
+
+  .panel-corner::before,
+  .panel-corner::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: #ffb020;
+    border-style: solid;
+  }
+  .panel-corner::before {
+    top: -1px;
+    left: -1px;
+    border-width: 1px 0 0 1px;
+  }
+  .panel-corner::after {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 1px 1px 0;
+  }
+
+  /* Monospace data label */
+  .label {
+    font-family: var(--font-plex-mono), monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #5c6b65;
+  }
+
+  /* Signal status dot */
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    display: inline-block;
+  }
+  .dot-live {
+    background: #35d07f;
+    box-shadow: 0 0 0 0 rgba(53, 208, 127, 0.6);
+    animation: ping-dot 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .dot-sealed {
+    background: #ff5c5c;
+    box-shadow: 0 0 8px rgba(255, 92, 92, 0.5);
+  }
+  .dot-amber {
+    background: #ffb020;
+    box-shadow: 0 0 8px rgba(255, 176, 32, 0.5);
+  }
+
+  /* Terminal feed line */
+  .feed-line {
+    font-family: var(--font-plex-mono), monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+  }
+
+  /* Ticker / marquee */
+  .ticker-track {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: ticker 32s linear infinite;
+  }
 }
 
-.glass-card {
-  background: rgba(17, 24, 39, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(92, 124, 250, 0.15);
-  border-radius: 12px;
+@keyframes ping-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(53, 208, 127, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(53, 208, 127, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(53, 208, 127, 0);
+  }
 }
 
-.pulse-dot {
-  animation: pulse 2s infinite;
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* Waveform bars */
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
