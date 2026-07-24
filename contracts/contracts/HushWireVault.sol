@@ -2,19 +2,31 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./interfaces/IEnclaveVerifier.sol";
 
 /**
  * @title HushWireVault
  * @notice Atomic settlement vault for HushWire agent negotiations.
- *         Holds escrowed FAssets and releases them only when both
- *         parties confirm settlement terms matched inside the
- *         Flare Confidential Compute enclave.
+ *         Holds escrowed FAssets and releases them only when the enclave
+ *         verifier attests both parties agreed to identical terms.
  * @dev The vault never sees negotiation terms — only the settlement
  *      instruction (pay X of token T to address B), which is the
  *      minimum public information needed for on-chain finality.
+ *
+ *      Security model:
+ *      - Execution is gated by IEnclaveVerifier.verify(), NOT by a trusted
+ *        caller. Whoever can produce a valid attestation for the exact
+ *        settlement terms can trigger release. On mainnet the verifier is
+ *        Flare Confidential Compute's on-chain attestation contract.
+ *      - The owner can only rotate the verifier / transfer ownership; the
+ *        owner CANNOT execute or drain settlements.
+ *      - SafeERC20 handles non-standard ERC20 return values.
  */
 contract HushWireVault is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     struct Settlement {
         address payer;
         address payee;
@@ -23,14 +35,13 @@ contract HushWireVault is ReentrancyGuard {
         uint64 deadline;     // escrow expiry
         bool executed;
         bool refunded;
-        bytes32 enclaveProof; // hash of the confidential compute attestation
+        bytes32 enclaveProof; // enclave attestation for these exact terms
     }
 
     mapping(uint256 => Settlement) public settlements;
     uint256 public settlementCount;
 
-    // Trusted enclave attester (Flare Confidential Compute oracle address)
-    address public enclaveAttester;
+    IEnclaveVerifier public verifier;
     address public owner;
 
     event SettlementCreated(
@@ -42,26 +53,30 @@ contract HushWireVault is ReentrancyGuard {
     );
     event SettlementExecuted(uint256 indexed id, address payee, uint256 amount);
     event SettlementRefunded(uint256 indexed id, address payer, uint256 amount);
-    event EnclaveAttesterUpdated(address newAttester);
+    event VerifierUpdated(address newVerifier);
+    event OwnershipTransferred(address newOwner);
 
     error NotOwner();
     error NotPayer();
-    error NotAttester();
     error SettlementNotFound();
     error AlreadyExecuted();
     error AlreadyRefunded();
     error DeadlineNotPassed();
     error DeadlinePassed();
-    error TransferFailed();
+    error AttestationFailed();
+    error ZeroAddress();
+    error ZeroAmount();
+    error ZeroDuration();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
     }
 
-    constructor(address _enclaveAttester) {
+    constructor(address _verifier) {
+        if (_verifier == address(0)) revert ZeroAddress();
         owner = msg.sender;
-        enclaveAttester = _enclaveAttester;
+        verifier = IEnclaveVerifier(_verifier);
     }
 
     /// @notice Create a settlement — payer escrows FAssets
@@ -71,6 +86,10 @@ contract HushWireVault is ReentrancyGuard {
         uint256 _amount,
         uint64 _duration
     ) external nonReentrant returns (uint256 id) {
+        if (_payee == address(0) || _asset == address(0)) revert ZeroAddress();
+        if (_amount == 0) revert ZeroAmount();
+        if (_duration == 0) revert ZeroDuration();
+
         id = settlementCount++;
         settlements[id] = Settlement({
             payer: msg.sender,
@@ -84,29 +103,30 @@ contract HushWireVault is ReentrancyGuard {
         });
 
         // Pull FAssets into escrow
-        bool success = IERC20(_asset).transferFrom(msg.sender, address(this), _amount);
-        if (!success) revert TransferFailed();
+        IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
 
         emit SettlementCreated(id, msg.sender, _payee, _asset, _amount);
     }
 
-    /// @notice Execute settlement — called after enclave confirms terms match
-    /// @dev In production, the enclaveAttester is the Flare Confidential Compute
-    ///      oracle that verifies both agents agreed to the same terms privately.
+    /// @notice Execute settlement — gated by a valid enclave attestation.
+    /// @dev Permissionless by design: the verifier is the trust root. Anyone
+    ///      may submit the attestation; release happens only if verify() passes
+    ///      for these exact terms.
     function executeSettlement(uint256 _id, bytes32 _enclaveProof) external nonReentrant {
-        if (msg.sender != enclaveAttester && msg.sender != owner) revert NotAttester();
-
         Settlement storage s = settlements[_id];
         if (s.payer == address(0)) revert SettlementNotFound();
         if (s.executed) revert AlreadyExecuted();
         if (s.refunded) revert AlreadyRefunded();
         if (block.timestamp > s.deadline) revert DeadlinePassed();
 
+        if (!verifier.verify(_id, s.payer, s.payee, s.asset, s.amount, _enclaveProof)) {
+            revert AttestationFailed();
+        }
+
         s.executed = true;
         s.enclaveProof = _enclaveProof;
 
-        bool success = IERC20(s.asset).transfer(s.payee, s.amount);
-        if (!success) revert TransferFailed();
+        IERC20(s.asset).safeTransfer(s.payee, s.amount);
 
         emit SettlementExecuted(_id, s.payee, s.amount);
     }
@@ -122,15 +142,22 @@ contract HushWireVault is ReentrancyGuard {
 
         s.refunded = true;
 
-        bool success = IERC20(s.asset).transfer(s.payer, s.amount);
-        if (!success) revert TransferFailed();
+        IERC20(s.asset).safeTransfer(s.payer, s.amount);
 
         emit SettlementRefunded(_id, s.payer, s.amount);
     }
 
-    /// @notice Update the enclave attester address (Flare governance / admin)
-    function setEnclaveAttester(address _newAttester) external onlyOwner {
-        enclaveAttester = _newAttester;
-        emit EnclaveAttesterUpdated(_newAttester);
+    /// @notice Rotate the enclave verifier (e.g. mock → Flare production verifier)
+    function setVerifier(address _newVerifier) external onlyOwner {
+        if (_newVerifier == address(0)) revert ZeroAddress();
+        verifier = IEnclaveVerifier(_newVerifier);
+        emit VerifierUpdated(_newVerifier);
+    }
+
+    /// @notice Transfer contract ownership
+    function transferOwnership(address _newOwner) external onlyOwner {
+        if (_newOwner == address(0)) revert ZeroAddress();
+        owner = _newOwner;
+        emit OwnershipTransferred(_newOwner);
     }
 }

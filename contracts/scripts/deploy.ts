@@ -1,4 +1,6 @@
 import { ethers } from "hardhat";
+import * as fs from "fs";
+import * as path from "path";
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -11,52 +13,49 @@ async function main() {
   await fxrp.waitForDeployment();
   console.log("MockFAsset (FXRP):", await fxrp.getAddress());
 
-  // --- 2. Deploy SealedBidAuction ---
+  // --- 2. Deploy enclave verifier (MOCK on testnet) ---
+  // On mainnet, replace with Flare Confidential Compute's real attestation verifier.
+  const MockEnclaveVerifier = await ethers.getContractFactory("MockEnclaveVerifier");
+  const verifier = await MockEnclaveVerifier.deploy();
+  await verifier.waitForDeployment();
+  console.log("MockEnclaveVerifier:", await verifier.getAddress());
+
+  // --- 3. Deploy SealedBidAuction ---
   const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
   const auction = await SealedBidAuction.deploy();
   await auction.waitForDeployment();
   console.log("SealedBidAuction:", await auction.getAddress());
 
-  // --- 3. Deploy HushWireVault ---
-  // For demo, deployer acts as enclave attester (in production: Flare Confidential Compute oracle)
+  // --- 4. Deploy HushWireVault (gated by the verifier) ---
   const HushWireVault = await ethers.getContractFactory("HushWireVault");
-  const vault = await HushWireVault.deploy(deployer.address);
+  const vault = await HushWireVault.deploy(await verifier.getAddress());
   await vault.waitForDeployment();
   console.log("HushWireVault:", await vault.getAddress());
 
-  // --- 4. Deploy FAssetSettlement ---
-  const FAssetSettlement = await ethers.getContractFactory("FAssetSettlement");
-  const settlement = await FAssetSettlement.deploy(
-    ethers.ZeroAddress, // FAssetManager placeholder (use real address on mainnet)
-    await vault.getAddress(),
-    await fxrp.getAddress()
-  );
-  await settlement.waitForDeployment();
-  console.log("FAssetSettlement:", await settlement.getAddress());
-
   // --- Summary ---
+  const network = await ethers.provider.getNetwork();
   console.log("\n=== HushWire Deployment Summary ===");
-  console.log("Network:", (await ethers.provider.getNetwork()).chainId.toString());
-  console.log("FXRP Token:      ", await fxrp.getAddress());
-  console.log("SealedBidAuction:", await auction.getAddress());
-  console.log("HushWireVault:   ", await vault.getAddress());
-  console.log("FAssetSettlement:", await settlement.getAddress());
+  console.log("Network chainId:", network.chainId.toString());
+  console.log("FXRP Token:          ", await fxrp.getAddress());
+  console.log("EnclaveVerifier:     ", await verifier.getAddress(), "(MOCK)");
+  console.log("SealedBidAuction:    ", await auction.getAddress());
+  console.log("HushWireVault:       ", await vault.getAddress());
   console.log("===================================\n");
 
   // Write addresses for frontend
   const addresses = {
     network: "coston2",
-    chainId: 114,
+    chainId: Number(network.chainId),
+    rpcUrl: "https://coston2-api.flare.network/ext/C/rpc",
     fxrpToken: await fxrp.getAddress(),
+    enclaveVerifier: await verifier.getAddress(),
     sealedBidAuction: await auction.getAddress(),
     hushWireVault: await vault.getAddress(),
-    fassetSettlement: await settlement.getAddress(),
     deployedAt: new Date().toISOString(),
   };
 
-  const fs = await import("fs");
   fs.writeFileSync(
-    "../src/lib/addresses.json",
+    path.join(__dirname, "../../src/lib/addresses.json"),
     JSON.stringify(addresses, null, 2)
   );
   console.log("Addresses written to src/lib/addresses.json");

@@ -27,11 +27,12 @@ contract SealedBidAuction {
         bool settled;
         address winner;
         uint256 winningBid;
-        mapping(address => Bid) bids;
-        address[] bidders;
     }
 
     mapping(uint256 => Auction) public auctions;
+    mapping(uint256 => mapping(address => Bid)) private _bids;
+    mapping(uint256 => address[]) private _bidders;
+    mapping(uint256 => mapping(address => bool)) public hasCommitted;
     uint256 public auctionCount;
 
     event AuctionCreated(uint256 indexed auctionId, address creator, address asset, uint256 reservePrice);
@@ -42,12 +43,18 @@ contract SealedBidAuction {
     error AuctionNotFound();
     error NotCreator();
     error CommitPhaseOver();
+    error CommitPhaseActive();
     error RevealPhaseNotStarted();
     error RevealPhaseOver();
+    error AlreadyCommitted();
     error AlreadyRevealed();
+    error NotCommitted();
     error InvalidReveal();
     error AlreadySettled();
     error NoValidBids();
+    error ZeroAddress();
+    error ZeroHash();
+    error ZeroDuration();
 
     /// @notice Create a new sealed-bid auction (negotiation round)
     function createAuction(
@@ -56,6 +63,9 @@ contract SealedBidAuction {
         uint64 _commitDuration,
         uint64 _revealDuration
     ) external returns (uint256 auctionId) {
+        if (_asset == address(0)) revert ZeroAddress();
+        if (_commitDuration == 0 || _revealDuration == 0) revert ZeroDuration();
+
         auctionId = auctionCount++;
         Auction storage a = auctions[auctionId];
         a.creator = msg.sender;
@@ -67,19 +77,22 @@ contract SealedBidAuction {
         emit AuctionCreated(auctionId, msg.sender, _asset, _reservePrice);
     }
 
-    /// @notice Commit a sealed bid (hash only — amount stays private)
+    /// @notice Commit a sealed bid (hash only — amount stays private). One commit per bidder.
     function commitBid(uint256 _auctionId, bytes32 _commitHash) external {
         Auction storage a = auctions[_auctionId];
         if (a.creator == address(0)) revert AuctionNotFound();
         if (block.timestamp > a.commitDeadline) revert CommitPhaseOver();
+        if (_commitHash == bytes32(0)) revert ZeroHash();
+        if (hasCommitted[_auctionId][msg.sender]) revert AlreadyCommitted();
 
-        a.bids[msg.sender] = Bid({
+        hasCommitted[_auctionId][msg.sender] = true;
+        _bids[_auctionId][msg.sender] = Bid({
             commitHash: _commitHash,
             amount: 0,
             revealed: false,
             timestamp: block.timestamp
         });
-        a.bidders.push(msg.sender);
+        _bidders[_auctionId].push(msg.sender);
 
         emit BidCommitted(_auctionId, msg.sender, _commitHash);
     }
@@ -91,7 +104,8 @@ contract SealedBidAuction {
         if (block.timestamp <= a.commitDeadline) revert RevealPhaseNotStarted();
         if (block.timestamp > a.revealDeadline) revert RevealPhaseOver();
 
-        Bid storage bid = a.bids[msg.sender];
+        Bid storage bid = _bids[_auctionId][msg.sender];
+        if (!hasCommitted[_auctionId][msg.sender]) revert NotCommitted();
         if (bid.revealed) revert AlreadyRevealed();
 
         // Verify the reveal matches the commit
@@ -114,12 +128,13 @@ contract SealedBidAuction {
 
         uint256 highest = 0;
         address winner = address(0);
+        address[] storage bidders = _bidders[_auctionId];
 
-        for (uint256 i = 0; i < a.bidders.length; i++) {
-            Bid storage bid = a.bids[a.bidders[i]];
+        for (uint256 i = 0; i < bidders.length; i++) {
+            Bid storage bid = _bids[_auctionId][bidders[i]];
             if (bid.revealed && bid.amount >= a.reservePrice && bid.amount > highest) {
                 highest = bid.amount;
-                winner = a.bidders[i];
+                winner = bidders[i];
             }
         }
 
@@ -132,8 +147,13 @@ contract SealedBidAuction {
         emit AuctionSettled(_auctionId, winner, highest);
     }
 
+    /// @notice View a single bid
+    function getBid(uint256 _auctionId, address _bidder) external view returns (Bid memory) {
+        return _bids[_auctionId][_bidder];
+    }
+
     /// @notice View all bidders for an auction
     function getBidders(uint256 _auctionId) external view returns (address[] memory) {
-        return auctions[_auctionId].bidders;
+        return _bidders[_auctionId];
     }
 }

@@ -4,9 +4,20 @@
 
 HushWire is a three-layer protocol:
 
-1. **Negotiation Layer** (SealedBidAuction) — Commit-reveal auction for private price discovery
-2. **Verification Layer** (Flare Confidential Compute) — Private attestation that terms match
-3. **Settlement Layer** (HushWireVault + FAssets) — Atomic on-chain settlement with escrow
+1. **Negotiation Layer** (`SealedBidAuction`) — Commit-reveal auction for private price discovery
+2. **Verification Layer** (`IEnclaveVerifier` → Flare Confidential Compute) — Attestation that terms match
+3. **Settlement Layer** (`HushWireVault` + FAssets) — Atomic on-chain settlement with escrow
+
+## Contracts
+
+| Contract | Role |
+|----------|------|
+| `SealedBidAuction.sol` | Commit-reveal sealed-bid auctions. One commit per bidder; hashes hide amounts until reveal. |
+| `HushWireVault.sol` | Escrows FAssets and releases them only when the verifier attests the exact settlement terms. |
+| `interfaces/IEnclaveVerifier.sol` | Interface the vault calls to verify a settlement before release. |
+| `MockEnclaveVerifier.sol` | **Testnet only.** Attests every settlement. Swapped for Flare's real verifier on mainnet. |
+| `MockRejectingVerifier.sol` | **Test helper.** Always rejects — used to assert the vault blocks bad attestations. |
+| `MockFAsset.sol` | **Testnet only.** Mock FXRP ERC20 with a public faucet. Replaced by the real FAsset on mainnet. |
 
 ## Contract Interactions
 
@@ -23,27 +34,26 @@ HushWire is a three-layer protocol:
 │  │ - revealBid      │     │ - transfer()     │                │
 │  │ - settle         │     │ - approve()      │                │
 │  └────────┬─────────┘     └────────┬─────────┘                │
-│           │                        │                           │
 │           │  winner determined     │  tokens escrowed          │
 │           ▼                        ▼                           │
 │  ┌──────────────────────────────────────────┐                 │
 │  │           HushWireVault                   │                 │
 │  │                                           │                 │
 │  │  - createSettlement (escrow FXRP)         │                 │
-│  │  - executeSettlement (enclave proof)      │                 │
-│  │  - refund (deadline expiry)               │                 │
+│  │  - executeSettlement (verifier-gated)     │                 │
+│  │  - refund (payer, after deadline)         │                 │
 │  └──────────────────────┬───────────────────┘                 │
-│                         │                                     │
-│                         │  attestation request                │
+│                         │  verify(terms, proof)               │
 │                         ▼                                     │
 │  ┌──────────────────────────────────────────┐                 │
-│  │   Flare Confidential Compute (external)   │                 │
+│  │   IEnclaveVerifier                        │                 │
+│  │   ├─ MockEnclaveVerifier (testnet)        │                 │
+│  │   └─ Flare Confidential Compute (mainnet) │                 │
 │  │                                           │                 │
-│  │   - Receives encrypted terms from both    │                 │
-│  │     parties                               │                 │
-│  │   - Verifies mutual agreement             │                 │
-│  │   - Returns signed attestation proof      │                 │
-│  │   - NEVER exposes terms on-chain          │                 │
+│  │   Returns true only if the attestation    │                 │
+│  │   proves both agents agreed to THESE      │                 │
+│  │   exact terms privately. Terms never      │                 │
+│  │   touch the chain.                        │                 │
 │  └──────────────────────────────────────────┘                 │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
@@ -53,26 +63,40 @@ HushWire is a three-layer protocol:
 
 | Threat | Mitigation |
 |--------|-----------|
-| Bid front-running | Commit-reveal scheme: only hashes visible during commit phase |
-| Term leakage | Confidential Compute enclave: verification happens off-chain in TEE |
-| Escrow theft | HushWireVault: funds only released with valid enclave attestation or after deadline refund |
-| Reentrancy | OpenZeppelin ReentrancyGuard on all vault state-changing functions |
-| Replay attacks | Settlement IDs are unique; executed/refunded flags prevent double-spend |
+| Bid front-running | Commit-reveal scheme: only hashes visible during the commit phase |
+| Duplicate-commit griefing | `hasCommitted` flag — one commit per bidder per auction |
+| Term leakage | Verification happens in a TEE via `IEnclaveVerifier`; terms stay off-chain |
+| Escrow theft / unauthorized release | `executeSettlement` is gated by `verifier.verify()` over the exact terms — **no privileged caller can force a release** |
+| Owner draining escrow | Owner can only rotate the verifier / transfer ownership; it **cannot** execute or refund settlements |
+| Reentrancy | OpenZeppelin `ReentrancyGuard` on all vault state-changing functions |
+| Non-standard ERC20 return values | `SafeERC20` for all token transfers |
+| Replay / double-spend | Unique settlement IDs; `executed`/`refunded` flags |
+| Invalid input | Zero-address, zero-amount, zero-duration, and zero-hash guards |
 
 ## Data Flow
 
 ### What's PUBLIC (on-chain):
 - Auction existence and parameters (reserve price, deadlines)
 - Commit hashes (not amounts)
-- Revealed bid amounts (after reveal phase)
+- Revealed bid amounts (after the reveal phase)
 - Settlement execution (payer, payee, amount)
 - Enclave attestation hash (proof it happened, not what was verified)
 
 ### What's PRIVATE (never on-chain):
-- Bid amounts during commit phase
+- Bid amounts during the commit phase
 - Negotiation strategy / bidding patterns
 - Enclave verification details (what exactly was compared)
 - Agent identity linking (agents can use fresh wallets per negotiation)
+
+## Testnet vs Mainnet
+
+| Component | Coston2 (now) | Mainnet (production) |
+|-----------|---------------|----------------------|
+| Settlement asset | `MockFAsset` (faucet-minted) | Real FAsset ERC20 from the FAssetManager system |
+| Attestation | `MockEnclaveVerifier` (always true) | Flare Confidential Compute's on-chain attestation verifier |
+| Swap path | — | `HushWireVault.setVerifier(realVerifier)` — one address change |
+
+The mocks are flagged on-chain (`IS_MOCK` / `IS_TEST_TOKEN`) so tooling can assert it is not talking to production contracts.
 
 ## Deployment Targets
 
@@ -84,9 +108,9 @@ HushWire is a three-layer protocol:
 
 ## Frontend (Vercel)
 
-- `/` — Landing page with protocol explanation
-- `/dashboard` — Live settlement and auction view (reads chain state)
-- `/agents` — Agent negotiation simulator (client-side demo)
+- `/` — Landing page with a live intercept feed and the deployed contract registry
+- `/dashboard` — Settlement console (rounds + ledger)
+- `/agents` — Agent negotiation simulator
 - `/api/simulate` — Serverless endpoint for triggering simulations
 
-No persistent server. All state lives on-chain. Vercel serves the UI and lightweight API routes.
+The UI reads contract addresses from `src/lib/addresses.json`, which the deploy script regenerates — so a redeploy updates the frontend automatically. No persistent server; all state lives on-chain.
