@@ -65,17 +65,20 @@ export async function runKeeper(cfg: KeeperConfig, opts?: { once?: boolean }): P
         const key = `${action.type}:${action.id}`;
         if (seen.has(key)) continue;
         if (!(await stillValid(vault, auction, action, now))) continue;
-        seen.add(key);
 
+        let hash: string | null = null;
         if (action.type === "execute-settlement") {
-          await txm.submit(`execute settlement #${action.id}`, () =>
+          hash = await txm.submit(`execute settlement #${action.id}`, () =>
             vault.executeSettlement(action.id, action.proof)
           );
         } else if (action.type === "refund") {
-          await txm.submit(`refund settlement #${action.id}`, () => vault.refund(action.id));
+          hash = await txm.submit(`refund settlement #${action.id}`, () => vault.refund(action.id));
         } else if (action.type === "settle-auction") {
-          await txm.submit(`settle auction #${action.id}`, () => auction.settle(action.id));
+          hash = await txm.submit(`settle auction #${action.id}`, () => auction.settle(action.id));
         }
+        // Only mark done on success; a failed action is retried next tick.
+        // stillValid() re-checks chain state before every send, so retries never double-execute.
+        if (hash) seen.add(key);
       }
     }
   };
