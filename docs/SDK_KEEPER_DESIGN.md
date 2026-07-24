@@ -315,12 +315,81 @@ P1 + P2 give a complete autonomous loop: **agents negotiate via the SDK, the kee
 
 ## 6. Risks & open questions
 
-- **Real attestation hand-off:** with the mock verifier the keeper can execute freely; with Flare's
-  real Confidential Compute verifier, the keeper needs the enclave's proof. The exact API for
-  retrieving that proof from Flare is the main unknown to resolve in P4/P5.
+- **Real attestation hand-off:** the mock verifier lets the keeper execute freely. The production
+  verifier is a **Flare Compute Extension (FCE)** on Flare Confidential Compute — see §7. FCC is
+  pre-production (no public SDK/endpoints yet), so the FCE can't be fully built today; the mock is
+  the correct placeholder, and our hooks (`IEnclaveVerifier`, `setVerifier`, `proofProvider`) already
+  match the target design.
 - **Salt secrecy:** the in-memory commitment store leaks the salt if the agent process is
   compromised. Production needs encrypted storage.
 - **Public RPC limits:** the keeper polls; on a busy mainnet it should move to WebSocket
   subscriptions (P5) to stay under rate limits and reduce latency.
 - **Keeper funding:** the keeper wallet needs gas. For the demo it's the deployer; production
   needs a funded, possibly rotated, keeper key.
+
+---
+
+## 7. Production verifier — Flare integration (from the Flare Developer Hub)
+
+Research into Flare's docs (`dev.flare.network`) clarifies exactly what the production verifier is
+and how to build it. Two Flare primitives are relevant:
+
+### 7.1 The two primitives
+
+| Primitive | What it attests | Maturity | Fit for HushWire |
+|-----------|-----------------|----------|------------------|
+| **FDC** (Flare Data Connector) | **Observable external facts** — an EVM tx happened, a payment occurred on BTC/XRP/DOGE, an address is valid, a web2 endpoint returned X. Data-provider consensus + Merkle proof + on-chain Merkle root. | Production | **No** — HushWire's "agreement" is *private mutual consent*, not an observable fact. No FDC attestation type covers it; `Web2Json` would leak the terms. |
+| **FCC** (Flare Confidential Compute) | **Private computation results** — via custom **Flare Compute Extensions (FCE)** running in TEEs. A TEE signs results with an on-chain-registered identity; those signatures verify on-chain. | **Pre-production** ("final stages", no public SDK/endpoints yet) | **Yes** — the correct primitive for attesting private mutual agreement. |
+
+> FAssets (FXRP) uses **FDC** to verify source-chain payments — an observable fact. HushWire's
+> agreement gate is fundamentally different: it needs the TEE, so it is an **FCC / FCE** use case.
+
+### 7.2 The production design: a HushWire FCE
+
+Deploy a custom **Flare Compute Extension** that acts as the enclave verifier:
+
+1. Both agents submit their signed settlement terms to the FCE off-chain (via the **TEE Proxy**,
+   the public server that serves attested results).
+2. Inside the TEE, the FCE verifies both parties signed **identical terms**
+   (payer agrees to pay `amount` to `payee` for `asset`).
+3. The FCE signs an attestation binding to `(settlementId, payer, payee, asset, amount)` with its
+   registered TEE identity key.
+4. The on-chain verifier checks that signature against the FCE's on-chain-registered identity and
+   returns `true` only if it matches these exact terms.
+
+This maps **exactly** onto the hooks already built:
+
+| HushWire hook | Production role |
+|---------------|-----------------|
+| `IEnclaveVerifier.verify(id, payer, payee, asset, amount, proof)` | `proof` = the FCE's TEE signature; the verifier checks it against the registered TEE identity |
+| `HushWireVault.setVerifier(addr)` | Rotate `MockEnclaveVerifier` → the FCE-backed verifier (no vault redeploy) |
+| Keeper `SettlementExecutor(proofProvider)` | `proofProvider(id)` fetches the attestation from the TEE Proxy |
+| `HushWireClient.execute(id, proof)` | Agent passes the attestation it obtained from the FCE |
+
+### 7.3 Concrete Flare artifacts (for when FCC ships)
+
+From the FDC docs — the on-chain verification pattern to mirror, and the packages to use:
+
+- **Packages:** `@flarenetwork/flare-periphery-contracts` (e.g. `coston2/ContractRegistry.sol`,
+  `IFdcVerification.sol`), `@flarenetwork/flare-periphery-contract-artifacts` (`interfaceToAbi`).
+- **Address resolution:** production code pulls current addresses from `ContractRegistry`
+  (e.g. `ContractRegistry.getFdcVerification()`), not hardcoded addresses.
+- **FDC verification shape:** `fdc.verifyEVMTransaction(IEVMTransaction.Proof)` where the proof is
+  `{ merkleProof: string[], data: Response }`; round finalization via `Relay.isFinalized(200, roundId)`
+  / the `ProtocolMessageRelayed` event.
+- **Attestation request flow:** prepare request → `FdcHub.requestAttestation(abiEncodedRequest)`
+  (pay fee) → wait for the round → fetch `{response, proof}` from the Data Availability Layer
+  (`/api/v0/fdc/get-proof-round-id-bytes`) → submit to the consuming contract.
+- **FdcHub (Coston only):** `0x1c78A073E3BD2aCa4cc327d55FB0cD4f0549B55b`.
+
+### 7.4 Status & sequencing
+
+- **Now (testnet/demo):** keep `MockEnclaveVerifier`. It is architecturally correct and **not a
+  theft vector** — the settlement `payee` is immutable (set by the payer at creation), so the mock
+  only waives the "proof of agreement" guarantee, which is fine for a demo.
+- **When FCC is public:** implement `FlareComputeVerifier` (an `IEnclaveVerifier` that verifies the
+  FCE's TEE signature), build the HushWire FCE, point the keeper's `proofProvider` at the TEE Proxy,
+  and call `setVerifier()`. No changes to the vault, the SDK shape, or the keeper loop are required.
+- **The one external dependency:** Flare's FCC SDK / TEE Proxy endpoints / FCE registration flow are
+  not yet published. Track `/fcc/overview`, `/fcc/guides/getting-started`, and the FCC whitepaper for
+  the concrete API.
