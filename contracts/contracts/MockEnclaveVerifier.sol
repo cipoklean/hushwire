@@ -22,7 +22,7 @@ contract MockEnclaveVerifier is IEnclaveVerifier {
         address,
         address,
         uint256,
-        bytes32
+        bytes calldata
     ) external pure override returns (bool) {
         return true;
     }

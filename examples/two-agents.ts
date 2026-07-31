@@ -5,6 +5,7 @@ import addresses from "../src/lib/addresses.json";
 import { HushWireClient } from "../sdk/src/index";
 import { runKeeper } from "../keeper/src/index";
 import { SettlementExecutor } from "../keeper/src/strategies/settlement-executor";
+import { makeSignerProofProvider } from "../keeper/src/strategies/settlement-executor";
 
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
@@ -111,15 +112,16 @@ async function main() {
   });
   log("Agent-A", `settlement #${settlementId} escrowed`);
 
-  // 8. Keeper autonomously executes the settlement (one tick)
-  log("keeper", "running keeper to execute settlement…");
+  // 8. Keeper autonomously executes the settlement with REAL authority signature
+  log("keeper", "running keeper to execute settlement with authority signature…");
+  const proofProvider = makeSignerProofProvider(pk); // deployer = authority
   await runKeeper(
     {
       rpcUrl: addresses.rpcUrl,
       chainId: addresses.chainId,
       signer: new ethers.Wallet(pk),
       contracts: { auction: contracts.auction, vault: contracts.vault },
-      strategies: [new SettlementExecutor()],
+      strategies: [new SettlementExecutor(proofProvider)],
     },
     { once: true }
   );

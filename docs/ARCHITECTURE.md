@@ -93,10 +93,23 @@ HushWire is a three-layer protocol:
 | Component | Coston2 (now) | Mainnet (production) |
 |-----------|---------------|----------------------|
 | Settlement asset | `MockFAsset` (faucet-minted) | Real FAsset ERC20 from the FAssetManager system |
-| Attestation | `MockEnclaveVerifier` (always true) | Flare Confidential Compute's on-chain attestation verifier |
+| Attestation | `SignatureVerifier` (authority = deployer) | Flare Confidential Compute's on-chain attestation verifier (FCE) |
 | Swap path | — | `HushWireVault.setVerifier(realVerifier)` — one address change |
 
 The mocks are flagged on-chain (`IS_MOCK` / `IS_TEST_TOKEN`) so tooling can assert it is not talking to production contracts.
+
+### Deployed Contracts (Coston2)
+
+| Contract | Address |
+|----------|---------|
+| MockFAsset (FXRP) | `0x7d59e809DB91270Dfd788956FA1E4d6E915F0E28` |
+| SealedBidAuction | `0x75F74f18B126fc3f95AFe19BB367A9a6b3a5C7fC` |
+| HushWireVault | `0x3b55807B50e0217efCab081AAD3C051C57a3D505` |
+| SignatureVerifier (authority = deployer) | `0x059F2780132a1d5bb54E1cAab7675C8338124d71` |
+
+Deployed: 2026-07-23 · Network: Flare Coston2 (Chain ID 114) · [Explorer](https://coston2-explorer.flare.network)
+
+> ⚠️ The `SignatureVerifier` uses the deployer as the attestation authority, performing real EIP-191 signature verification over exact settlement terms. On mainnet, rotate `HushWireVault.setVerifier()` to a Flare Compute Extension verifier, and replace `MockFAsset` with the real FAsset ERC20.
 
 ## Deployment Targets
 

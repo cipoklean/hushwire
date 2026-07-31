@@ -149,11 +149,37 @@ export class HushWireClient {
     return { settlementId, txHash: receipt!.hash };
   }
 
-  /** Execute a settlement given an enclave attestation proof. */
+  /** Execute a settlement given an attestation proof (65-byte signature for SignatureVerifier). */
   async execute(settlementId: number, proof: ethers.BytesLike): Promise<string> {
     const tx = await this.vault.executeSettlement(settlementId, proof);
     const receipt = await tx.wait();
     return receipt!.hash;
+  }
+
+  /**
+   * Generate a SignatureVerifier attestation for a settlement by signing its exact terms.
+   * The returned 65-byte signature is the `proof` for execute(...).
+   *
+   * NOTE: this client (its signer) is acting as the attestation authority. Today that's the
+   * HushWire operator key which performs confidential term-matching off-chain. When Flare
+   * FCC ships, the authority becomes the FCE TEE identity and this helper is superseded by a
+   * proof fetched from the TEE proxy — the payload shape stays identical.
+   */
+  async attestSettlement(settlementId: number): Promise<string> {
+    const s = await this.getSettlement(settlementId);
+    const chainId = (await this.provider.getNetwork()).chainId;
+    const terms = ethers.solidityPackedKeccak256(
+      ["address", "uint256", "uint256", "address", "address", "address", "uint256"],
+      [this.contracts.vault, chainId, BigInt(settlementId), s.payer, s.payee, s.asset, s.amount]
+    );
+    // Single EIP-191 wrap: signMessage over the 32-byte terms hash.
+    return this.signer.signMessage(ethers.getBytes(terms));
+  }
+
+  /** Convenience: generate the attestation and execute in one step. */
+  async attestAndExecute(settlementId: number): Promise<string> {
+    const proof = await this.attestSettlement(settlementId);
+    return this.execute(settlementId, proof);
   }
 
   /** Refund an expired escrow (payer only). */

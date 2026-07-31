@@ -96,14 +96,14 @@ Agent A (Buyer)                    Agent B/C (Sellers)
 
 | Contract | Address |
 |----------|---------|
-| MockFAsset (FXRP) | `0xF1E1Db70Af29f78B79F56135685b2De15147cC8A` |
-| SealedBidAuction | `0x9Fd9eD1F017b785cbA44947Df99F4AE4f3945b0a` |
-| HushWireVault | `0xBF9d97a54BA2eB0e559b5012a77550F3dDC3312D` |
-| EnclaveVerifier (MOCK) | `0x088e7FA7271858f5Fb3E029818AC3e5A174aEEcd` |
+| MockFAsset (FXRP) | `0x7d59e809DB91270Dfd788956FA1E4d6E915F0E28` |
+| SealedBidAuction | `0x75F74f18B126fc3f95AFe19BB367A9a6b3a5C7fC` |
+| HushWireVault | `0x3b55807B50e0217efCab081AAD3C051C57a3D505` |
+| SignatureVerifier (authority = deployer) | `0x059F2780132a1d5bb54E1cAab7675C8338124d71` |
 
 Deployed: 2026-07-23 · Network: Flare Coston2 (Chain ID 114) · [Explorer](https://coston2-explorer.flare.network)
 
-> ⚠️ The `EnclaveVerifier` is a **mock** that attests every settlement. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier, and replace `MockFAsset` with the real FAsset ERC20.
+> ⚠️ The `SignatureVerifier` is an **authority-based verifier** (deployer = authority) that performs real EIP-191 signature verification over exact settlement terms. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier (a Flare Compute Extension), and replace `MockFAsset` with the real FAsset ERC20.
 
 ---
 

@@ -13,12 +13,12 @@ async function main() {
   await fxrp.waitForDeployment();
   console.log("MockFAsset (FXRP):", await fxrp.getAddress());
 
-  // --- 2. Deploy enclave verifier (MOCK on testnet) ---
+  // --- 2. Deploy SignatureVerifier (authority = deployer) ---
   // On mainnet, replace with Flare Confidential Compute's real attestation verifier.
-  const MockEnclaveVerifier = await ethers.getContractFactory("MockEnclaveVerifier");
-  const verifier = await MockEnclaveVerifier.deploy();
+  const SignatureVerifier = await ethers.getContractFactory("SignatureVerifier");
+  const verifier = await SignatureVerifier.deploy(deployer.address);
   await verifier.waitForDeployment();
-  console.log("MockEnclaveVerifier:", await verifier.getAddress());
+  console.log("SignatureVerifier (authority = deployer):", await verifier.getAddress());
 
   // --- 3. Deploy SealedBidAuction ---
   const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
@@ -26,7 +26,7 @@ async function main() {
   await auction.waitForDeployment();
   console.log("SealedBidAuction:", await auction.getAddress());
 
-  // --- 4. Deploy HushWireVault (gated by the verifier) ---
+  // --- 4. Deploy HushWireVault (gated by the SignatureVerifier) ---
   const HushWireVault = await ethers.getContractFactory("HushWireVault");
   const vault = await HushWireVault.deploy(await verifier.getAddress());
   await vault.waitForDeployment();
@@ -37,7 +37,7 @@ async function main() {
   console.log("\n=== HushWire Deployment Summary ===");
   console.log("Network chainId:", network.chainId.toString());
   console.log("FXRP Token:          ", await fxrp.getAddress());
-  console.log("EnclaveVerifier:     ", await verifier.getAddress(), "(MOCK)");
+  console.log("SignatureVerifier:   ", await verifier.getAddress(), "(authority = deployer)");
   console.log("SealedBidAuction:    ", await auction.getAddress());
   console.log("HushWireVault:       ", await vault.getAddress());
   console.log("===================================\n");
@@ -48,7 +48,7 @@ async function main() {
     chainId: Number(network.chainId),
     rpcUrl: "https://coston2-api.flare.network/ext/C/rpc",
     fxrpToken: await fxrp.getAddress(),
-    enclaveVerifier: await verifier.getAddress(),
+    signatureVerifier: await verifier.getAddress(),
     sealedBidAuction: await auction.getAddress(),
     hushWireVault: await vault.getAddress(),
     deployedAt: new Date().toISOString(),

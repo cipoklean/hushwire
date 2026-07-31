@@ -35,7 +35,7 @@ contract HushWireVault is ReentrancyGuard {
         uint64 deadline;     // escrow expiry
         bool executed;
         bool refunded;
-        bytes32 enclaveProof; // enclave attestation for these exact terms
+        bytes enclaveProof; // attestation (e.g. 65-byte signature) for these exact terms
     }
 
     mapping(uint256 => Settlement) public settlements;
@@ -99,7 +99,7 @@ contract HushWireVault is ReentrancyGuard {
             deadline: uint64(block.timestamp) + _duration,
             executed: false,
             refunded: false,
-            enclaveProof: bytes32(0)
+            enclaveProof: ""
         });
 
         // Pull FAssets into escrow
@@ -112,7 +112,7 @@ contract HushWireVault is ReentrancyGuard {
     /// @dev Permissionless by design: the verifier is the trust root. Anyone
     ///      may submit the attestation; release happens only if verify() passes
     ///      for these exact terms.
-    function executeSettlement(uint256 _id, bytes32 _enclaveProof) external nonReentrant {
+    function executeSettlement(uint256 _id, bytes calldata _enclaveProof) external nonReentrant {
         Settlement storage s = settlements[_id];
         if (s.payer == address(0)) revert SettlementNotFound();
         if (s.executed) revert AlreadyExecuted();
