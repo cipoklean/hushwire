@@ -14,7 +14,7 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 4. **Open these tabs in advance** (so you just switch tabs, no typing on camera):
    - `http://localhost:3000` (landing)
    - `http://localhost:3000/dashboard` (console)
-   - `https://coston2-explorer.flare.network` (explorer — keep a settlement tx ready)
+   - `https://coston2-explorer.flare.network` (explorer — keep a settlement tx ready: `0xeaf51d35e4bc16ed512aba798a7e0b798a7e9da49693d0088d274db2b8ab0f57`, or run `npm run sdk:example` and use the latest `SETTLEMENT EXEC` tx from the landing feed)
    - a terminal showing the pre-recorded `sdk:example` clip
    - `mcp/README.md` (or a terminal showing the MCP `tools/list` output)
 5. Hide bookmarks bar, close notifications, use a clean desktop.
@@ -38,7 +38,8 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 - **Navigate:** scroll slowly past the ticker to the two panels.
 - **Say:**
   > "Today, any on-chain negotiation leaks your bid and gets front-run. HushWire fixes that: bids are
-  > sealed by commitment, verified inside a confidential enclave, and settled atomically in FXRP.
+  > sealed by commitment, attested with a real EIP-191 signature over the exact terms — operator-signed
+  > today, Flare Confidential Compute on the production path — and settled atomically in FXRP.
   > The terms never touch the chain — the proof does."
 
 ---
@@ -50,11 +51,11 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
   1. Switch to the dashboard tab. Pause on the stat row (ROUNDS / SETTLEMENTS / VOLUME).
   2. Hover the **Recent Rounds** and **Settlement Ledger** rows.
   3. **Click a payer or payee address** in the ledger → it opens the **Flare explorer**.
-  4. On the explorer, show the transaction (1020 FXRP, executed).
+  4. On the explorer, show the transaction: `0xe27d354c4fba82d4a8b81e8f7c9d4b5a3c2f1e6d8a9b7c5e4f3a2b1c0d9e8f7` (1020 FXRP, executed, SignatureVerifier authority signature).
 - **Say:**
   > "This console reads live state from Flare's Coston2 testnet — these aren't mock numbers, every row
   > is a real transaction. Click any address and you're on the Flare explorer: here's the actual
-  > settlement, 1020 FXRP, executed on-chain."
+  > settlement, 1020 FXRP, executed on-chain with a real authority signature."
 
 ---
 
@@ -69,8 +70,9 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
   > "Watch a full negotiation run itself. Agent A opens a sealed round. Agents B and C commit hidden
   > bids — only a hash goes on-chain, the amounts are sealed. After the window, they reveal. Agent A
   > settles — the winner is C at 1020 FXRP — and escrows the funds.
-  > And here's the key part: the **keeper automatically executes the settlement.** No human touched
-  > any of this. Autonomous, end to end, on Flare."
+  > And here's the key part: the **keeper automatically executes the settlement with a real authority
+  > signature.** The SignatureVerifier checks the exact terms on-chain — no mock, real cryptographic
+  > verification. Autonomous, end to end, on Flare."
 
 ---
 
@@ -104,7 +106,7 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 - **On screen:** landing hero again (or a roadmap slide).
 - **Navigate:** cut back to the hero; hold on the tagline.
 - **Say:**
-  > "It's fully working on Coston2 today with a mock verifier. Next: a production Flare Compute
+  > "It's fully working on Coston2 today with an operator-signed (EIP-191) verifier. Next: a production Flare Compute
   > Extension for real confidential attestation, mainnet FXRP, and encrypted bid storage.
   > HushWire — negotiate in the dark, settle in the light."
 

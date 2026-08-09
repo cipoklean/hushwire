@@ -34,6 +34,7 @@ async function main() {
 
   // --- Summary ---
   const network = await ethers.provider.getNetwork();
+  const deployedBlock = await ethers.provider.getBlockNumber();
   console.log("\n=== HushWire Deployment Summary ===");
   console.log("Network chainId:", network.chainId.toString());
   console.log("FXRP Token:          ", await fxrp.getAddress());
@@ -51,6 +52,7 @@ async function main() {
     signatureVerifier: await verifier.getAddress(),
     sealedBidAuction: await auction.getAddress(),
     hushWireVault: await vault.getAddress(),
+    deployedBlock,
     deployedAt: new Date().toISOString(),
   };
 

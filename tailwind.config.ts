@@ -7,19 +7,24 @@ const config: Config = {
       colors: {
         // Deep charcoal-teal base (signal console)
         base: {
-          0: "#0b0f0e",
-          1: "#101614",
-          2: "#161f1c",
+          0: "#080b0a",
+          1: "#0e1311",
+          2: "#14211c",
           3: "#1d2825",
         },
         line: "#26332e",
+        "line-strong": "#3a4d44",
         // Signal colors — used semantically
         signal: {
           amber: "#ffb020",
           amberHi: "#ffc247",
+          amberDim: "#ffb02033",
           green: "#35d07f",
+          greenDim: "#35d07f33",
           cyan: "#4fd1c5",
+          cyanDim: "#4fd1c533",
           red: "#ff5c5c",
+          redDim: "#ff5c5c33",
         },
         ink: {
           hi: "#eef2ef",

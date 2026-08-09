@@ -45,6 +45,7 @@ contract SealedBidAuction {
     error CommitPhaseOver();
     error CommitPhaseActive();
     error RevealPhaseNotStarted();
+    error RevealPhaseActive();
     error RevealPhaseOver();
     error AlreadyCommitted();
     error AlreadyRevealed();
@@ -118,12 +119,12 @@ contract SealedBidAuction {
         emit BidRevealed(_auctionId, msg.sender, _amount);
     }
 
-    /// @notice Settle the auction — highest valid bid wins
+    /// @notice Settle the auction — highest valid bid wins (creator only, after reveal deadline)
     function settle(uint256 _auctionId) external {
         Auction storage a = auctions[_auctionId];
         if (a.creator == address(0)) revert AuctionNotFound();
         if (msg.sender != a.creator) revert NotCreator();
-        if (block.timestamp <= a.revealDeadline) revert RevealPhaseOver();
+        if (block.timestamp <= a.revealDeadline) revert RevealPhaseActive();
         if (a.settled) revert AlreadySettled();
 
         uint256 highest = 0;

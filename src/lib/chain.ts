@@ -24,7 +24,7 @@ const AUCTION_ABI = [
 
 const VAULT_ABI = [
   "function settlementCount() view returns (uint256)",
-  "function settlements(uint256) view returns (address payer, address payee, address asset, uint256 amount, uint64 deadline, bool executed, bool refunded, bytes32 enclaveProof)",
+  "function settlements(uint256) view returns (address payer, address payee, address asset, uint256 amount, uint64 deadline, bool executed, bool refunded, bytes enclaveProof)",
 ];
 
 /**

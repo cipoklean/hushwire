@@ -95,3 +95,19 @@ export interface ChainSnapshot {
   auctions: AuctionView[];
   settlements: SettlementView[];
 }
+
+// ── Live on-chain event (from /api/events) ──
+
+export type ChainEventTone = "amber" | "red" | "cyan" | "green" | "dim";
+
+export interface ChainEvent {
+  id: string; // `${block}-${logIndex}` — stable key
+  contract: "auction" | "vault";
+  name: string; // raw event name, e.g. "BidCommitted"
+  label: string; // display tag, e.g. "BID COMMIT"
+  tone: ChainEventTone;
+  block: number;
+  txHash: string;
+  blockTime: number; // unix seconds (from the block)
+  summary: string; // human-readable line
+}

@@ -28,9 +28,22 @@ const SCRIPT: Omit<LogLine, "time">[] = [
   { src: "AGENT-B", tag: "REVEAL", msg: "bid 950 FXRP revealed · hash match verified ✓", tone: "cyan" },
   { src: "AGENT-C", tag: "REVEAL", msg: "bid 1020 FXRP revealed · hash match verified ✓", tone: "cyan" },
   { src: "AGENT-A", tag: "AWARD", msg: "winner selected → AGENT-C (1020 FXRP)", tone: "amber" },
-  { src: "ENCLAVE", tag: "VERIFY", msg: "Confidential Compute attests mutual agreement · terms undisclosed", tone: "green" },
+  { src: "AUTHORITY", tag: "ATTEST", msg: "EIP-191 signature over exact terms · operator-signed today", tone: "green" },
   { src: "VAULT", tag: "SETTLE", msg: "1020 FXRP released from escrow → AGENT-C", tone: "green" },
   { src: "CHAIN", tag: "FINAL", msg: "settlement proof immutable · negotiation terms remain private ✓", tone: "green" },
+];
+
+const AGENTS = [
+  { name: "AGENT-A", role: "BUYER", addr: "0x5d5c…00D2", tone: "text-signal-amber", dot: "dot-amber" },
+  { name: "AGENT-B", role: "SELLER", addr: "0x75E0…8969", tone: "text-signal-cyan", dot: "dot-live" },
+  { name: "AGENT-C", role: "SELLER", addr: "0x3c52…cF1d", tone: "text-signal-cyan", dot: "dot-live" },
+];
+
+const FLOW_STEPS = [
+  { s: "COMMIT", d: "hashes on-chain", tone: "text-signal-red" },
+  { s: "REVEAL", d: "amounts opened", tone: "text-signal-cyan" },
+  { s: "ATTEST", d: "EIP-191 signed", tone: "text-signal-green" },
+  { s: "SETTLE", d: "FXRP released", tone: "text-signal-amber" },
 ];
 
 export default function AgentsPage() {
@@ -86,13 +99,13 @@ export default function AgentsPage() {
           </h1>
           <p className="mt-2 max-w-xl text-sm text-ink-mid">
             Watch autonomous agents run a full sealed-bid negotiation — commit,
-            reveal, enclave verify, atomic settle — streamed as a live intercept.
+            reveal, EIP-191 attestation, atomic settle — streamed as a live intercept.
           </p>
         </div>
         <button
           onClick={run}
           disabled={running}
-          className="group inline-flex items-center gap-2 border border-signal-amber bg-signal-amber px-6 py-3 font-display text-sm font-bold tracking-wider text-base-0 transition-all hover:bg-signal-amberHi hover:shadow-[0_0_24px_rgba(255,176,32,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="group inline-flex items-center gap-2 btn-primary"
         >
           {running ? (
             <>
@@ -134,7 +147,7 @@ export default function AgentsPage() {
             {logs.map((l, i) => (
               <div
                 key={i}
-                className="feed-line flex gap-3 animate-fade-up"
+                className="feed-line flex gap-3 animate-fade-up data-row"
                 style={{ animationDuration: "0.35s" }}
               >
                 <span className="shrink-0 text-ink-lo">{l.time}</span>
@@ -161,15 +174,11 @@ export default function AgentsPage() {
         {/* Side panel: agents + flow */}
         <div className="space-y-6">
           {/* Agents */}
-          <div className="panel p-5">
+          <div className="panel p-5 panel-elevated">
             <div className="label mb-4">PARTICIPANTS</div>
             <div className="space-y-3">
-              {[
-                { name: "AGENT-A", role: "BUYER", addr: "0x5d5c…00D2", tone: "text-signal-amber", dot: "dot-amber" },
-                { name: "AGENT-B", role: "SELLER", addr: "0x75E0…8969", tone: "text-signal-cyan", dot: "dot-live" },
-                { name: "AGENT-C", role: "SELLER", addr: "0x3c52…cF1d", tone: "text-signal-cyan", dot: "dot-live" },
-              ].map((a) => (
-                <div key={a.name} className="flex items-center gap-3 border border-line bg-base-2/40 px-3 py-2.5">
+              {AGENTS.map((a) => (
+                <div key={a.name} className="flex items-center gap-3 border border-line bg-base-2/40 px-3 py-2.5 panel-elevated data-row">
                   <span className={`dot ${a.dot}`} />
                   <div className="min-w-0 flex-1">
                     <div className={`font-mono text-sm font-semibold ${a.tone}`}>{a.name}</div>
@@ -182,7 +191,7 @@ export default function AgentsPage() {
           </div>
 
           {/* Outcome */}
-          <div className={`panel p-5 transition-opacity ${done ? "opacity-100" : "opacity-40"}`}>
+          <div className={`panel p-5 panel-elevated transition-opacity ${done ? "opacity-100" : "opacity-40"}`}>
             <div className="label mb-4">SETTLEMENT OUTCOME</div>
             {done ? (
               <div className="space-y-3 font-mono text-sm">
@@ -195,8 +204,8 @@ export default function AgentsPage() {
                   <span className="text-signal-amber">1020 FXRP</span>
                 </div>
                 <div className="flex justify-between border-b border-line/50 pb-2">
-                  <span className="text-ink-lo">ENCLAVE</span>
-                  <span className="text-signal-cyan">ATTESTED ✓</span>
+                  <span className="text-ink-lo">ATTESTATION</span>
+                  <span className="text-signal-cyan">EIP-191 ✓</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-ink-lo">TERMS</span>
@@ -211,16 +220,11 @@ export default function AgentsPage() {
           </div>
 
           {/* Flow diagram */}
-          <div className="panel p-5">
+          <div className="panel p-5 panel-elevated">
             <div className="label mb-4">SIGNAL FLOW</div>
             <div className="space-y-2 font-mono text-[11px]">
-              {[
-                { s: "COMMIT", d: "hashes on-chain", tone: "text-signal-red" },
-                { s: "REVEAL", d: "amounts opened", tone: "text-signal-cyan" },
-                { s: "VERIFY", d: "enclave attests", tone: "text-signal-green" },
-                { s: "SETTLE", d: "FXRP released", tone: "text-signal-amber" },
-              ].map((f, i, arr) => (
-                <div key={f.s}>
+              {FLOW_STEPS.map((f, i, arr) => (
+                <div key={f.s} className="data-row px-2 py-1 rounded">
                   <div className="flex items-center gap-2">
                     <span className={`w-16 font-semibold ${f.tone}`}>{f.s}</span>
                     <span className="text-ink-lo">{f.d}</span>

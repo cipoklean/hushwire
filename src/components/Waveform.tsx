@@ -8,15 +8,18 @@ export default function Waveform({
   bars = 48,
   className = "",
   color = "#ffb020",
+  height = "100%",
 }: {
   bars?: number;
   className?: string;
   color?: string;
+  height?: string;
 }) {
   return (
     <div
-      className={`flex h-12 items-end gap-[3px] ${className}`}
+      className={`flex items-end gap-[3px] ${className}`}
       aria-hidden
+      style={{ height }}
     >
       {Array.from({ length: bars }).map((_, i) => {
         // Deterministic pseudo-random height pattern
@@ -28,7 +31,8 @@ export default function Waveform({
             style={{
               height: `${Math.min(h, 100)}%`,
               background: color,
-              opacity: 0.35 + Math.abs(Math.sin(i * 0.8)) * 0.65,
+              boxShadow: `0 0 6px ${color}55`,
+              opacity: 0.3 + Math.abs(Math.sin(i * 0.8)) * 0.7,
               animation: `wave ${1.1 + (i % 5) * 0.18}s ease-in-out ${i * 0.06}s infinite`,
             }}
           />

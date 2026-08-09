@@ -1,0 +1,9 @@
+# Never upload secrets or local state to Vercel
+.env
+.env.*
+!.env.example
+node_modules
+.next
+contracts/artifacts
+contracts/cache
+contracts/typechain-types

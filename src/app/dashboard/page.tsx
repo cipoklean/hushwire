@@ -9,9 +9,9 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour12: false });
 
 const PHASE_STYLE: Record<AuctionPhase, string> = {
-  COMMIT: "text-signal-red border-signal-red/40 bg-signal-red/5",
-  REVEAL: "text-signal-cyan border-signal-cyan/40 bg-signal-cyan/5",
-  SETTLED: "text-signal-green border-signal-green/40 bg-signal-green/5",
+  COMMIT: "text-signal-red border-signal-red/40 bg-signal-redDim",
+  REVEAL: "text-signal-cyan border-signal-cyan/40 bg-signal-cyanDim",
+  SETTLED: "text-signal-green border-signal-green/40 bg-signal-greenDim",
   ENDED: "text-ink-lo border-line bg-base-2/40",
 };
 
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           </p>
           <button
             onClick={manualRefresh}
-            className="mt-6 border border-signal-amber bg-signal-amber px-6 py-2.5 font-display text-sm font-bold tracking-wider text-base-0 transition-all hover:bg-signal-amberHi"
+            className="mt-6 btn-primary"
           >
             RETRY CONNECTION
           </button>
@@ -135,7 +135,7 @@ export default function DashboardPage() {
       {snap && (
         <>
           {stale && (
-            <div className="mb-6 border border-signal-amber/40 bg-signal-amber/5 px-4 py-2.5 font-mono text-[11px] tracking-wider text-signal-amber">
+            <div className="mb-6 border border-signal-amber/40 bg-signal-amberDim px-4 py-2.5 font-mono text-[11px] tracking-wider text-signal-amber">
               ⚠ SHOWING LAST KNOWN STATE — live sync interrupted ({error}). Retrying…
             </div>
           )}
@@ -148,7 +148,7 @@ export default function DashboardPage() {
               { label: "VOLUME · RECENT", value: `${snap.stats.volumeRecent.toLocaleString()} FXRP`, tone: "text-signal-cyan" },
               { label: "BIDDERS · RECENT", value: snap.stats.biddersRecent.toString(), tone: "text-ink-hi" },
             ].map((s) => (
-              <div key={s.label} className="group bg-base-1 p-6 transition-colors hover:bg-base-2">
+              <div key={s.label} className="group bg-base-1 p-6 panel-elevated">
                 <div className="label mb-3">{s.label}</div>
                 <div className={`font-display text-3xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
                 <div className="mt-3 h-[2px] w-8 bg-line transition-all duration-500 group-hover:w-full group-hover:bg-signal-amber" />
@@ -156,7 +156,7 @@ export default function DashboardPage() {
             ))}
           </div>
           <p className="mt-2 font-mono text-[10px] tracking-widest2 text-ink-lo">
-            VOLUME &amp; BIDDERS SAMPLED FROM THE MOST RECENT ON-CHAIN ACTIVITY · TOTALS ARE EXACT
+            VOLUME & BIDDERS SAMPLED FROM THE MOST RECENT ON-CHAIN ACTIVITY · TOTALS ARE EXACT
           </p>
 
           {/* Empty state */}
@@ -169,7 +169,7 @@ export default function DashboardPage() {
               </p>
               <a
                 href="/agents"
-                className="mt-6 inline-block border border-signal-amber bg-signal-amber px-6 py-2.5 font-display text-sm font-bold tracking-wider text-base-0 transition-all hover:bg-signal-amberHi"
+                className="mt-6 inline-block btn-primary"
               >
                 ▶ RUN INTERCEPT
               </a>
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-3">
                   {snap.auctions.map((a) => (
-                    <div key={a.id} className="panel p-4 transition-colors hover:border-signal-amber/40">
+                    <div key={a.id} className="panel p-4 panel-elevated data-row">
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-sm text-ink-hi">
                           ROUND <span className="text-signal-amber">#{a.id}</span>
@@ -226,7 +226,7 @@ export default function DashboardPage() {
                   <h2 className="font-display text-lg font-semibold text-ink-hi">SETTLEMENT LEDGER</h2>
                   <Waveform bars={14} className="h-5" color="#35d07f" />
                 </div>
-                <div className="panel overflow-hidden">
+                <div className="panel panel-elevated overflow-hidden">
                   <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 border-b border-line bg-base-2/60 px-4 py-2.5 font-mono text-[10px] tracking-widest2 text-ink-lo">
                     <span>TX</span>
                     <span>ROUTE</span>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                     return (
                       <div
                         key={s.id}
-                        className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 border-b border-line/50 px-4 py-3.5 transition-colors last:border-0 hover:bg-base-2/50"
+                        className="data-row grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 border-b border-line/50 px-4 py-3.5 transition-colors last:border-0"
                       >
                         <span className="font-mono text-[11px] text-ink-lo">#{s.id}</span>
                         <div className="min-w-0 font-mono text-xs text-ink-mid">

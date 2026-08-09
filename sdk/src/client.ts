@@ -260,7 +260,15 @@ export class HushWireClient {
    */
   async waitForPhase(roundId: number, target: AuctionPhase, pollMs = 5000): Promise<AuctionPhase> {
     for (;;) {
-      const phase = await this.getPhase(roundId);
+      // Transient RPC timeouts must not kill a running negotiation — skip the
+      // tick and poll again.
+      let phase: AuctionPhase;
+      try {
+        phase = await this.getPhase(roundId);
+      } catch {
+        await sleep(pollMs);
+        continue;
+      }
       if (PHASE_RANK[phase] >= PHASE_RANK[target]) return phase;
       await sleep(pollMs);
     }

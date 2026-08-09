@@ -13,7 +13,7 @@ HushWire is a confidential agent-to-agent payment protocol on Flare. Autonomous 
 | **Project Name** | HushWire |
 | **Selected Bounties** | Bounty 1 (Interoperable Asset Products) + Bounty 2 (Confidential Compute Apps) |
 | **Target User** | Autonomous AI agents, OTC desks, and any party needing private negotiation with public settlement finality |
-| **Demo Link** | [Deployed Vercel URL] |
+| **Demo Link** | https://hushwire-eight.vercel.app |
 | **GitHub Repo** | [This repo] |
 | **Network** | Flare Coston2 (testnet) |
 
@@ -96,12 +96,12 @@ Agent A (Buyer)                    Agent B/C (Sellers)
 
 | Contract | Address |
 |----------|---------|
-| MockFAsset (FXRP) | `0x7d59e809DB91270Dfd788956FA1E4d6E915F0E28` |
-| SealedBidAuction | `0x75F74f18B126fc3f95AFe19BB367A9a6b3a5C7fC` |
-| HushWireVault | `0x3b55807B50e0217efCab081AAD3C051C57a3D505` |
-| SignatureVerifier (authority = deployer) | `0x059F2780132a1d5bb54E1cAab7675C8338124d71` |
+| MockFAsset (FXRP) | `0xed0b4da8513bd767B693122b4A53Cf4f903ee633` |
+| SealedBidAuction | `0x472098a25E85D1f99373ea2D8161d30bFc921bB1` |
+| HushWireVault | `0xBb45952B02D034600B5355FA67794B6980334fc2` |
+| SignatureVerifier (authority = deployer) | `0x381f654BA74e7F18B320A355Cca8A339d8f9d120` |
 
-Deployed: 2026-07-23 · Network: Flare Coston2 (Chain ID 114) · [Explorer](https://coston2-explorer.flare.network)
+Deployed: 2026-08-09 · Network: Flare Coston2 (Chain ID 114) · [Explorer](https://coston2-explorer.flare.network)
 
 > ⚠️ The `SignatureVerifier` is an **authority-based verifier** (deployer = authority) that performs real EIP-191 signature verification over exact settlement terms. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier (a Flare Compute Extension), and replace `MockFAsset` with the real FAsset ERC20.
 
@@ -129,8 +129,8 @@ npm run deploy:coston2
 # Run frontend
 npm run dev
 
-# Run agent simulator (requires deployed contracts)
-npm run simulate
+# Run the autonomous agent simulation (two agents negotiate + keeper settles on-chain)
+npm run simulate   # alias: npm run sdk:example
 ```
 
 ---
@@ -159,7 +159,7 @@ npm run simulate
 
 | Name | Role |
 |------|------|
-| [Your name] | Full-stack / Contracts |
+| Aghazie David | Full-stack / Contracts |
 
 ---
 

@@ -38,7 +38,7 @@ chain — the settlement proof does. In short: *negotiate in the dark, settle in
 
 ## 5. Demo link, video, or working app link
 
-- **Live web console:** **[PENDING — Vercel deploy]** — a signal-intelligence-style dashboard that
+- **Live web console:** **https://hushwire-eight.vercel.app** — a signal-intelligence-style dashboard that
   reads live Coston2 state (rounds, settlements, volume) with explorer links.
 - **On-chain demo (live now):** all contracts are deployed on **Coston2** and a full
   negotiation → settlement has been **executed on-chain** (e.g. `HushWireVault` settlement #1,
@@ -61,7 +61,7 @@ chain — the settlement proof does. In short: *negotiate in the dark, settle in
   - `docs/ARCHITECTURE.md` — system architecture + security model
   - `docs/SDK_KEEPER_DESIGN.md` — SDK/keeper design + the production verifier roadmap (§7, grounded
     in Flare Developer Hub research)
-  - `contracts/test/HushWire.test.ts` — **20 passing tests**
+  - `contracts/test/HushWire.test.ts` + `SignatureVerifier.test.ts` — **26 passing tests**
   - `mcp/README.md` — MCP tool reference + client registration config
 
 ---
@@ -109,10 +109,10 @@ Deployed on **Flare Coston2** (chain ID **114**) — Explorer: https://coston2-e
 
 | Contract | Address |
 |----------|---------|
-| MockFAsset (FXRP) | `0x7d59e809DB91270Dfd788956FA1E4d6E915F0E28` |
-| SealedBidAuction | `0x75F74f18B126fc3f95AFe19BB367A9a6b3a5C7fC` |
-| HushWireVault | `0x3b55807B50e0217efCab081AAD3C051C57a3D505` |
-| SignatureVerifier (authority = deployer) | `0x059F2780132a1d5bb54E1cAab7675C8338124d71` |
+| MockFAsset (FXRP) | `0xed0b4da8513bd767B693122b4A53Cf4f903ee633` |
+| SealedBidAuction | `0x472098a25E85D1f99373ea2D8161d30bFc921bB1` |
+| HushWireVault | `0xBb45952B02D034600B5355FA67794B6980334fc2` |
+| SignatureVerifier (authority = deployer) | `0x381f654BA74e7F18B320A355Cca8A339d8f9d120` |
 
 > ⚠️ The `SignatureVerifier` is an **authority-based verifier** (deployer = authority) that performs real EIP-191 signature verification over exact settlement terms. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier (a Flare Compute Extension), and replace `MockFAsset` with the real FAsset ERC20.
 
@@ -136,7 +136,7 @@ Deployed on **Flare Coston2** (chain ID **114**) — Explorer: https://coston2-e
 
 - **Deployed on Coston2:** ✅ Yes — all contracts live and exercised on Coston2 (chain 114).
   Not yet on Songbird or Flare Mainnet.
-- **Testing:** ✅ 20/20 contract tests passing; a full negotiation → settlement verified **on-chain**;
+- **Testing:** ✅ 26/26 contract tests passing; a full negotiation → settlement verified **on-chain**;
   the MCP server's handshake **and** a real tool call (`get_status`) verified end-to-end.
 - **Early usage / traction:** 🟡 Early. The on-chain demo activity (sealed rounds + executed
   settlements) is real and inspectable on the explorer. Concrete user-acquisition is the next focus:
