@@ -2,17 +2,21 @@ import * as dotenv from "dotenv";
 import * as path from "path";
 import { ethers } from "ethers";
 import addresses from "../src/lib/addresses.json";
-import { HushWireClient } from "../sdk/src/index";
-import { runKeeper } from "../keeper/src/index";
-import { SettlementExecutor } from "../keeper/src/strategies/settlement-executor";
-import { makeSignerProofProvider } from "../keeper/src/strategies/settlement-executor";
+import { HushWireClient, JsonFileCommitmentStore } from "../sdk/src/index";
 
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 // Deterministic demo agent keys — TESTNET ONLY.
-const AGENT_A_PK = process.env.AGENT_A_PRIVATE_KEY || "0x" + "a1".repeat(32); // buyer
+const AGENT_A_PK = process.env.AGENT_A_PRIVATE_KEY || "0x" + "a1".repeat(32); // buyer / creator
 const AGENT_B_PK = process.env.AGENT_B_PRIVATE_KEY || "0x" + "b2".repeat(32); // seller
 const AGENT_C_PK = process.env.AGENT_C_PRIVATE_KEY || "0x" + "c3".repeat(32); // seller
+
+// Durable, crash-safe salt storage: if the process dies between commit and
+// reveal, the salt survives on disk and the bid can still be revealed.
+// Each agent gets its own file (they hold different secrets).
+const SALTS_FILE_B = path.join(__dirname, "../.hushwire-salts-B.json");
+const SALTS_FILE_C = path.join(__dirname, "../.hushwire-salts-C.json");
+const SALT_KEY = process.env.HUSHWIRE_SALT_KEY; // optional AES-256-GCM key
 
 function log(actor: string, msg: string) {
   const t = new Date().toISOString().slice(11, 19);
@@ -24,7 +28,7 @@ async function main() {
   if (!pk) throw new Error("DEPLOYER_PRIVATE_KEY not set in .env");
 
   console.log("\n══════════════════════════════════════════════════════");
-  console.log("  HushWire SDK + Keeper — Autonomous Negotiation");
+  console.log("  HushWire SDK — Autonomous Negotiation (atomic settleAndPay)");
   console.log(`  ${addresses.network} · chain ${addresses.chainId}`);
   console.log("══════════════════════════════════════════════════════\n");
 
@@ -34,29 +38,37 @@ async function main() {
   });
   const deployer = new ethers.Wallet(pk, provider);
 
-  const walletA = new ethers.Wallet(AGENT_A_PK);
-  const walletB = new ethers.Wallet(AGENT_B_PK);
-  const walletC = new ethers.Wallet(AGENT_C_PK);
-
   const contracts = {
     auction: addresses.sealedBidAuction,
     vault: addresses.hushWireVault,
     fasset: addresses.fxrpToken,
   };
-  const mkClient = (w: ethers.Wallet) =>
-    new HushWireClient({ rpcUrl: addresses.rpcUrl, chainId: addresses.chainId, signer: w, contracts });
 
-  const agentA = mkClient(walletA); // buyer
-  const agentB = mkClient(walletB); // seller
-  const agentC = mkClient(walletC); // seller
+  // Each agent gets its own wallet + client. B and C persist their commit
+  // salts to disk (crash-safe), optionally encrypted.
+  const mkClient = (w: ethers.Wallet, store?: JsonFileCommitmentStore) =>
+    new HushWireClient({
+      rpcUrl: addresses.rpcUrl,
+      chainId: addresses.chainId,
+      signer: w,
+      contracts,
+      commitmentStore: store,
+    });
 
-  log("setup", `A (buyer)  ${walletA.address}`);
-  log("setup", `B (seller) ${walletB.address}`);
-  log("setup", `C (seller) ${walletC.address}`);
+  const agentA = mkClient(new ethers.Wallet(AGENT_A_PK)); // buyer (creator)
+  const storeB = new JsonFileCommitmentStore(SALTS_FILE_B, SALT_KEY);
+  const storeC = new JsonFileCommitmentStore(SALTS_FILE_C, SALT_KEY);
+  const agentB = mkClient(new ethers.Wallet(AGENT_B_PK), storeB); // seller
+  const agentC = mkClient(new ethers.Wallet(AGENT_C_PK), storeC); // seller
+  const authority = mkClient(new ethers.Wallet(pk)); // attestation authority (deployer)
+
+  log("setup", `A (buyer)  ${new ethers.Wallet(AGENT_A_PK).address}`);
+  log("setup", `B (seller) ${new ethers.Wallet(AGENT_B_PK).address}`);
+  log("setup", `C (seller) ${new ethers.Wallet(AGENT_C_PK).address}`);
 
   // Fund agents with gas
   log("setup", "funding agents with C2FLR…");
-  for (const w of [walletA, walletB, walletC]) {
+  for (const w of [new ethers.Wallet(AGENT_A_PK), new ethers.Wallet(AGENT_B_PK), new ethers.Wallet(AGENT_C_PK)]) {
     const tx = await deployer.sendTransaction({ to: w.address, value: ethers.parseEther("1") });
     await tx.wait();
   }
@@ -76,7 +88,7 @@ async function main() {
   });
   log("Agent-A", `round #${roundId} open`);
 
-  // 2. Sellers commit sealed bids (SDK generates + stores the salt)
+  // 2. Sellers commit sealed bids (salt is persisted to disk)
   log("Agent-B", "committing sealed bid (950 FXRP)…");
   await agentB.commitBid(roundId, ethers.parseEther("950"));
   log("Agent-C", "committing sealed bid (1020 FXRP)…");
@@ -86,57 +98,59 @@ async function main() {
   log("wait", "commit window closing…");
   await agentA.waitForPhase(roundId, "REVEAL");
 
-  // 4. Sellers reveal (SDK supplies the stored salt)
+  // 4. CRASH SIMULATION: build fresh clients (as if the process restarted) —
+  //    the salts loaded from disk still reveal the bids.
+  log("sim", "process restart — reloading persisted salts…");
+  const agentB2 = mkClient(new ethers.Wallet(AGENT_B_PK), new JsonFileCommitmentStore(SALTS_FILE_B, SALT_KEY));
+  const agentC2 = mkClient(new ethers.Wallet(AGENT_C_PK), new JsonFileCommitmentStore(SALTS_FILE_C, SALT_KEY));
   log("Agent-B", "revealing bid…");
-  const revB = await agentB.revealBid(roundId);
-  log("Agent-B", `revealed ${ethers.formatEther(revB.amount)} FXRP`);
+  const revB = await agentB2.revealBid(roundId);
+  log("Agent-B", `revealed ${ethers.formatEther(revB.amount)} FXRP (salt from disk)`);
   log("Agent-C", "revealing bid…");
-  const revC = await agentC.revealBid(roundId);
-  log("Agent-C", `revealed ${ethers.formatEther(revC.amount)} FXRP`);
+  const revC = await agentC2.revealBid(roundId);
+  log("Agent-C", `revealed ${ethers.formatEther(revC.amount)} FXRP (salt from disk)`);
 
-  // 5. Wait for the reveal window to close
+  // 5. Bidders back their bids (only funded bids can win; escrows refunded at settle)
+  log("Agent-B", `escrowing bid (${ethers.formatEther(revB.amount)} FXRP)…`);
+  await agentB2.escrowBid(roundId);
+  log("Agent-C", `escrowing bid (${ethers.formatEther(revC.amount)} FXRP)…`);
+  await agentC2.escrowBid(roundId);
+
+  // 6. Wait for the reveal window to close
   log("wait", "reveal window closing…");
   await agentA.waitForPhase(roundId, "ENDED");
 
-  // 6. Buyer settles
-  log("Agent-A", "settling round…");
-  const result = await agentA.settle(roundId);
-  log("Agent-A", `winner ${result.winner} at ${ethers.formatEther(result.amount)} FXRP`);
-
-  // 7. Buyer escrows the winning amount to the winner
-  log("Agent-A", `escrowing ${ethers.formatEther(result.amount)} FXRP to winner…`);
+  // 7. Buyer reads the winner off-chain, then escrows the payment
+  const { winner, amount } = await agentA.getWinner(roundId);
+  log("Agent-A", `winner ${winner} at ${ethers.formatEther(amount)} FXRP`);
+  log("Agent-A", `escrowing ${ethers.formatEther(amount)} FXRP to winner…`);
   const { settlementId } = await agentA.escrow({
-    payee: result.winner,
-    amount: result.amount,
+    payee: winner,
+    amount,
     durationSeconds: 3600,
   });
   log("Agent-A", `settlement #${settlementId} escrowed`);
 
-  // 8. Keeper autonomously executes the settlement with REAL authority signature
-  log("keeper", "running keeper to execute settlement with authority signature…");
-  const proofProvider = makeSignerProofProvider(pk); // deployer = authority
-  await runKeeper(
-    {
-      rpcUrl: addresses.rpcUrl,
-      chainId: addresses.chainId,
-      signer: new ethers.Wallet(pk),
-      contracts: { auction: contracts.auction, vault: contracts.vault },
-      strategies: [new SettlementExecutor(proofProvider)],
-    },
-    { once: true }
-  );
+  // 8. ATOMIC settle + pay: authority signs the exact terms, then ONE tx
+  //    settles the round AND releases the payment from the vault.
+  log("authority", `signing attestation for settlement #${settlementId}…`);
+  const proof = await authority.attestSettlement(settlementId);
+  log("keeper", "submitting settleAndPay (round settle + vault release in one tx)…");
+  const sp = await authority.settleAndPay(roundId, settlementId, proof);
+  log("keeper", `tx ${sp.txHash.slice(0, 18)}… · winner ${sp.winner.slice(0, 10)}… @ ${ethers.formatEther(sp.amount)} FXRP`);
 
   // 9. Verify
-  const winnerClient =
-    result.winner.toLowerCase() === walletC.address.toLowerCase() ? agentC : agentB;
+  const winnerClient = winner.toLowerCase() === new ethers.Wallet(AGENT_C_PK).address.toLowerCase() ? agentC2 : agentB2;
   const bal = await winnerClient.balanceFAsset();
   const settlement = await agentA.getSettlement(settlementId);
+  const round = await agentA.getRound(roundId);
   log("verify", `winner FXRP balance now ${ethers.formatEther(bal)}`);
   log("verify", `settlement #${settlementId} executed=${settlement.executed}`);
+  log("verify", `round #${roundId} phase=${round.phase} · bidder escrows refunded`);
 
   console.log("\n══════════════════════════════════════════════════════");
-  console.log("  ✓ Autonomous negotiation complete");
-  console.log("  SDK drove the agents · keeper executed the settlement");
+  console.log("  ✓ Atomic negotiation complete (settleAndPay)");
+  console.log("  Round settled + payment released in a single transaction");
   console.log("══════════════════════════════════════════════════════\n");
 }
 

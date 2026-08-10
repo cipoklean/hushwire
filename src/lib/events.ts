@@ -17,7 +17,10 @@ const AUCTION_EVENTS = [
   "event AuctionCreated(uint256 indexed auctionId, address creator, address asset, uint256 reservePrice)",
   "event BidCommitted(uint256 indexed auctionId, address bidder, bytes32 commitHash)",
   "event BidRevealed(uint256 indexed auctionId, address bidder, uint256 amount)",
+  "event BidEscrowed(uint256 indexed auctionId, address bidder, uint256 amount)",
   "event AuctionSettled(uint256 indexed auctionId, address winner, uint256 amount)",
+  "event AuctionRecovered(uint256 indexed auctionId)",
+  "event EscrowRefunded(uint256 indexed auctionId, address bidder, uint256 amount)",
 ];
 
 const VAULT_EVENTS = [
@@ -50,8 +53,14 @@ const labelFor = (name: string): { label: string; tone: ChainEventTone } => {
       return { label: "BID COMMIT", tone: "red" };
     case "BidRevealed":
       return { label: "BID REVEAL", tone: "cyan" };
+    case "BidEscrowed":
+      return { label: "BID ESCROW", tone: "amber" };
     case "AuctionSettled":
       return { label: "AUCTION SETTLED", tone: "amber" };
+    case "AuctionRecovered":
+      return { label: "ROUND RECOVERED", tone: "red" };
+    case "EscrowRefunded":
+      return { label: "ESCROW REFUND", tone: "dim" };
     case "SettlementCreated":
       return { label: "ESCROW LOCK", tone: "amber" };
     case "SettlementExecuted":
@@ -72,8 +81,14 @@ const summaryFor = (name: string, args: Record<string, unknown>): string => {
       return `round #${args.auctionId} · ${s(args.bidder)} · amount ⌀ sealed`;
     case "BidRevealed":
       return `round #${args.auctionId} · ${s(args.bidder)} · ${fxrp(args.amount as bigint)} FXRP`;
+    case "BidEscrowed":
+      return `round #${args.auctionId} · ${s(args.bidder)} · ${fxrp(args.amount as bigint)} FXRP funded`;
     case "AuctionSettled":
       return `round #${args.auctionId} · winner ${s(args.winner)} · ${fxrp(args.amount as bigint)} FXRP`;
+    case "AuctionRecovered":
+      return `round #${args.auctionId} · creator never settled · escrows returned`;
+    case "EscrowRefunded":
+      return `round #${args.auctionId} · ${s(args.bidder)} · ${fxrp(args.amount as bigint)} FXRP returned`;
     case "SettlementCreated":
       return `settlement #${args.id} · ${s(args.payer)} → ${s(args.payee)} · ${fxrp(args.amount as bigint)} FXRP`;
     case "SettlementExecuted":
@@ -104,9 +119,15 @@ async function fetchLogs(
   const res = await fetch(url);
   if (!res.ok) throw new Error(`explorer ${res.status}`);
   const json = await res.json();
-  if (json.message !== "OK") throw new Error(json.message ?? "explorer getLogs failed");
-  const result = json.result as ExplorerLog[];
-  if (!Array.isArray(result)) return [];
+  const result = json.result as ExplorerLog[] | undefined;
+  // "No transactions found" (indexing lag on brand-new blocks) is an EMPTY
+  // result, not an error — only genuine failures throw.
+  if (!Array.isArray(result)) {
+    if (json.message && json.message !== "OK" && json.message !== "No transactions found") {
+      throw new Error(json.message);
+    }
+    return [];
+  }
   // Blockscout caps a single call at ~1000 rows; if we hit the cap, split the
   // range and recurse so we never silently drop history.
   if (result.length >= 1000 && toBlock - fromBlock > 1000) {
@@ -123,7 +144,8 @@ export async function getRecentEvents(limit = 8): Promise<EventsResult> {
 
   const toBlock = await latestBlock();
   const deployedBlock = (addresses as { deployedBlock?: number }).deployedBlock ?? 0;
-  const fromBlock = Math.max(deployedBlock, 0);
+  // Guard against a stale/behind latest-block source.
+  const fromBlock = Math.min(Math.max(deployedBlock, 0), toBlock);
   let windowed = false;
 
   let raw: ExplorerLog[] = [];
@@ -133,8 +155,18 @@ export async function getRecentEvents(limit = 8): Promise<EventsResult> {
       fetchLogs(addresses.hushWireVault, fromBlock, toBlock),
     ]);
     raw = [...a, ...v];
+    // Brand-new blocks may not be indexed yet — one short retry before
+    // falling back to the RPC.
+    if (raw.length === 0 && toBlock - fromBlock < 10_000) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const [a2, v2] = await Promise.all([
+        fetchLogs(addresses.sealedBidAuction, fromBlock, toBlock),
+        fetchLogs(addresses.hushWireVault, fromBlock, toBlock),
+      ]);
+      raw = [...a2, ...v2];
+    }
   } catch {
-    // Explorer API down — fall back to a narrow RPC window (30-block cap).
+    // Explorer API down — fall back to paged RPC reads (30-block hard cap).
     windowed = true;
     raw = await rpcFallback(RPC_FALLBACK_BLOCKS);
   }
@@ -188,9 +220,14 @@ export async function getRecentEvents(limit = 8): Promise<EventsResult> {
 }
 
 async function latestBlock(): Promise<number> {
-  const res = await fetch(`${API}?module=block&action=eth_block_number`);
-  const json = await res.json();
-  return parseInt(json.result ?? "0x0", 16);
+  // The explorer's block-number endpoint can lag behind; the RPC is the
+  // authoritative head. (The explorer is still used for log reads — the RPC
+  // caps eth_getLogs at 30 blocks, the explorer is indexed.)
+  const provider = new ethers.JsonRpcProvider(addresses.rpcUrl, {
+    chainId: addresses.chainId,
+    name: addresses.network,
+  });
+  return provider.getBlockNumber();
 }
 
 async function rpcFallback(blocks: number): Promise<ExplorerLog[]> {
@@ -199,18 +236,32 @@ async function rpcFallback(blocks: number): Promise<ExplorerLog[]> {
     name: addresses.network,
   });
   const latest = await provider.getBlockNumber();
-  const logs = await provider.getLogs({
-    address: [addresses.sealedBidAuction, addresses.hushWireVault],
-    fromBlock: latest - blocks,
-    toBlock: latest,
-  });
-  return logs.map((l) => ({
-    address: l.address,
-    blockNumber: `0x${l.blockNumber.toString(16)}`,
-    timeStamp: "0x0",
-    topics: [...l.topics],
-    data: l.data,
-    transactionHash: l.transactionHash,
-    logIndex: `0x${l.index.toString(16)}`,
-  }));
+  const out: ExplorerLog[] = [];
+  // The public RPC caps eth_getLogs at 30 blocks — page backwards in chunks.
+  const CHUNK = 30;
+  for (let end = latest; end > latest - blocks && out.length < 100; end -= CHUNK) {
+    const start = Math.max(end - CHUNK + 1, 0);
+    let logs: ethers.Log[];
+    try {
+      logs = await provider.getLogs({
+        address: [addresses.sealedBidAuction, addresses.hushWireVault],
+        fromBlock: start,
+        toBlock: end,
+      });
+    } catch {
+      break; // RPC refusing further ranges — return what we have
+    }
+    for (const l of logs) {
+      out.push({
+        address: l.address,
+        blockNumber: `0x${l.blockNumber.toString(16)}`,
+        timeStamp: "0x0",
+        topics: [...l.topics],
+        data: l.data,
+        transactionHash: l.transactionHash,
+        logIndex: `0x${l.index.toString(16)}`,
+      });
+    }
+  }
+  return out;
 }

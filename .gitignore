@@ -28,4 +28,5 @@ contracts/typechain-types/
 # TypeScript incremental build info
 *.tsbuildinfo
 
-.vercel
+# Agent commit salts (crash-safe store)
+.hushwire-salts-*.json

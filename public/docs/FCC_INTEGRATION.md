@@ -1,5 +1,8 @@
 # FCC / FCE Integration Research
 
+<!-- SERVED COPY — source of truth: docs/FCC_INTEGRATION.md. Keep in sync when
+     editing the source (the landing page links here). -->
+
 Research from the Flare Developer Hub guides + GitHub (fetched during the Summer Signal build, July 2026).
 Status caveat from the docs: *"Flare Confidential Compute is in the final stages of development and is
 not yet a fully public production system."* It runs on **Coston2 only** (chain id 114), in a local

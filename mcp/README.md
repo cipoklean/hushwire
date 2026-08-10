@@ -15,13 +15,17 @@ JSON-RPC over stdio.
 | `open_round` | Open a sealed-bid round → returns `roundId` |
 | `commit_bid` | Commit a sealed bid (amount hidden until reveal) |
 | `reveal_bid` | Reveal a committed bid (after the commit window) |
-| `settle_round` | Settle a round (creator only) → winner + amount |
+| `settle_round` | Settle a round (creator before the settle deadline; anyone after) → winner + amount |
 | `escrow` | Escrow FXRP for a payee → returns `settlementId` |
 | `get_round` | Read a round's full state |
 | `get_settlement` | Read a settlement's full state |
 | `mint_test_fxrp` | Testnet faucet (Coston2 only) |
 
 Amounts are passed as **whole-FXRP strings** (e.g. `"1020"`); the server converts to wei.
+
+> The MCP server exposes the core negotiation/settlement toolset. The SDK additionally ships
+> `escrowBid`, `settleAndPay` (atomic settle + pay) and `recover` (hostage protection) for
+> programmatic use.
 
 ## Configuration
 
@@ -74,5 +78,6 @@ You should see an `initialize` result and a `tools/list` result naming the nine 
 
 ## Production note
 
-The server uses the deployed **mock** enclave verifier on Coston2. For mainnet, point the deploy at
-Flare's real Confidential Compute verifier — the SDK/keeper/server code is unchanged.
+The server talks to the deployed **`SignatureVerifier`** (operator-signed EIP-191) on Coston2. For
+mainnet, point the deploy at Flare's real Confidential Compute verifier (a Flare Compute Extension) —
+the SDK/keeper/server code is unchanged.

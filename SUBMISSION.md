@@ -1,7 +1,7 @@
 # HushWire — Flare Summer Signal Submission
 
-> Copy each section into the corresponding DoraHacks field. Items marked **[PENDING]** are the
-> only two things left to fill: the live Vercel demo URL and the public GitHub repo URL.
+> Copy each numbered section into the corresponding DoraHacks field.
+> **[PENDING]** marks the two items left: the public GitHub repo URL and the demo video.
 
 ---
 
@@ -14,17 +14,22 @@
 ## 2. Selected bounty or bounties
 
 - **Bounty 1 — Interoperable Asset Products** — settlement is performed in **FXRP**, a Flare FAsset.
-- **Bounty 2 — Confidential Compute Apps** — the settlement gate is an enclave verifier designed for
-  **Flare Confidential Compute** (a Flare Compute Extension in production; a mock on testnet).
+- **Bounty 2 — Confidential Compute Apps** — settlement is gated by an attestation verifier built for
+  **Flare Confidential Compute**: operator-signed **EIP-191** on testnet today, a **Flare Compute
+  Extension (FCE)** in production. The verifier interface already matches the FCC shielded-transfer
+  pattern (see `docs/FCC_INTEGRATION.md`).
 
 ---
 
 ## 3. Short product description
 
 HushWire is a settlement rail for autonomous agents. Agents negotiate price **privately** through a
-commit–reveal sealed-bid auction, the winning terms are **verified inside a confidential enclave**,
-and the payment **settles atomically on Flare in FXRP**. The negotiation strategy never touches the
-chain — the settlement proof does. In short: *negotiate in the dark, settle in the light.*
+commit–reveal sealed-bid auction; bidders back their bids with escrowed amounts; the winning terms are
+**attested** (real EIP-191 signature over the exact terms — operator-signed today, Flare Confidential
+Compute on the production path); and the payment **settles atomically on Flare in FXRP**:
+`settleAndPay` settles the round and releases the escrowed payment in **one transaction**. The
+negotiation strategy never touches the chain — the settlement proof does. In short:
+*negotiate in the dark, settle in the light.*
 
 ---
 
@@ -38,18 +43,24 @@ chain — the settlement proof does. In short: *negotiate in the dark, settle in
 
 ## 5. Demo link, video, or working app link
 
-- **Live web console:** **https://hushwire-eight.vercel.app** — a signal-intelligence-style dashboard that
-  reads live Coston2 state (rounds, settlements, volume) with explorer links.
+- **Live web console:** **https://hushwire-eight.vercel.app** — landing page with a **live on-chain
+  event feed** (real Vault/Auction logs: commits, reveals, escrows, settlements — with block numbers
+  and explorer links), plus a dashboard reading live Coston2 state.
 - **On-chain demo (live now):** all contracts are deployed on **Coston2** and a full
-  negotiation → settlement has been **executed on-chain** (e.g. `HushWireVault` settlement #1,
-  1020 FXRP, status EXECUTED). Verify on the explorer: https://coston2-explorer.flare.network
+  negotiation → settlement has been **executed on-chain** via `settleAndPay` (settlement #0,
+  1020 FXRP, EXECUTED; the round settle + payment release + escrow refunds happened in a single
+  transaction, `0xf9c62e13a36a5b5860d7e09e8fc21d432cbcd276b99b9dbf5695274d170ed7a7`).
+  Verify on the explorer: https://coston2-explorer.flare.network
 - **Run it yourself (from the repo):**
-  - `npm run sdk:example` — two agents run a full **autonomous** negotiation, and the keeper
-    executes the settlement on-chain (~2 min, no human in the loop).
+  - `npm run sdk:example` — two agents run a full **autonomous** negotiation: sealed commits,
+    a simulated process restart that reveals bids from **crash-safe persisted salts**, escrowed bids,
+    and an authority-signed `settleAndPay` that settles + pays in one tx (~2.5 min, no human in the loop).
   - `npm run mcp` — start the **MCP server**; any MCP-capable agent can call 9 HushWire tools
-    (`open_round`, `commit_bid`, `reveal_bid`, `settle_round`, `escrow`, …).
-  - `npm run dev` — local dashboard at `http://localhost:3000`.
-- **Video:** **[PENDING — 2–3 min demo]** (landing → live dashboard → MCP tools → on-chain settlement).
+    (`get_status`, `open_round`, `commit_bid`, `reveal_bid`, `settle_round`, `escrow`, `get_round`,
+    `get_settlement`, `mint_test_fxrp`).
+  - `npm run dev` — local web console at `http://localhost:3000`.
+- **Video:** **[PENDING — 2–3 min demo]** (landing + live feed → dashboard → autonomous negotiation →
+  on-chain settlement → MCP tools). Full script: `DEMO_SCRIPT.md`.
 
 ---
 
@@ -57,12 +68,13 @@ chain — the settlement proof does. In short: *negotiate in the dark, settle in
 
 - **Repository:** **[PENDING — GitHub push]**
 - **In-repo technical materials:**
-  - `README.md` — overview + deployed addresses
+  - `README.md` — overview, architecture, deployed addresses, run instructions
   - `docs/ARCHITECTURE.md` — system architecture + security model
-  - `docs/SDK_KEEPER_DESIGN.md` — SDK/keeper design + the production verifier roadmap (§7, grounded
-    in Flare Developer Hub research)
-  - `contracts/test/HushWire.test.ts` + `SignatureVerifier.test.ts` — **26 passing tests**
+  - `docs/FCC_INTEGRATION.md` — Flare Confidential Compute / FCE research grounding the verifier design
+  - `docs/SDK_KEEPER_DESIGN.md` — SDK/keeper design + the production verifier roadmap (§7)
+  - `contracts/test/` — **42 passing tests** (HushWire.test.ts, HushWireV2.test.ts, SignatureVerifier.test.ts)
   - `mcp/README.md` — MCP tool reference + client registration config
+  - `DEMO_SCRIPT.md` — full demo-video script
 
 ---
 
@@ -74,32 +86,34 @@ stops working.
 | Flare primitive | How HushWire uses it |
 |-----------------|----------------------|
 | **FAssets (FXRP)** | The settlement asset. Escrow and atomic release happen in FXRP, turning XRP value (which has no native smart contracts) into a programmable settlement token. This is the *interoperable asset product*. |
-| **Flare Confidential Compute (FCC)** | The settlement gate. `HushWireVault.executeSettlement` only releases funds if `IEnclaveVerifier.verify(...)` confirms both parties agreed to the exact terms. The interface is built for a **Flare Compute Extension (FCE)** — a TEE that signs the attestation with an on-chain-registered identity. A `MockEnclaveVerifier` stands in on testnet; `setVerifier()` swaps in the real one with no redeploy. |
-| **Flare EVM (Coston2)** | All contracts (`SealedBidAuction`, `HushWireVault`, verifiers, mock FXRP) are deployed and exercised on Coston2 (chain ID 114). |
+| **Flare Confidential Compute (FCC)** | The attestation gate. `HushWireVault.executeSettlement` only releases funds if `IEnclaveVerifier.verify(...)` confirms the attestation over the exact settlement terms. Today the gate is `SignatureVerifier` — real EIP-191 signature verification by the operator key. The interface is built for a **Flare Compute Extension (FCE)** — a TEE that signs attestations with an on-chain-registered identity — and `setVerifier()` swaps it in with no redeploy. The design mirrors Flare's own `fce-shielded-transfers` ShieldedVault pattern (research in `docs/FCC_INTEGRATION.md`). |
+| **Flare EVM (Coston2)** | All contracts (`SealedBidAuction` v2, `HushWireVault`, `SignatureVerifier`, mock FXRP) are deployed and exercised on Coston2 (chain ID 114). |
 
-The privacy lives off-chain (sealed bids + enclave verification); Flare provides the **interoperable
-asset** and the **verifiable confidential attestation** that make private-to-public settlement possible.
+The privacy lives off-chain (sealed bids + escrowed commitment); Flare provides the **interoperable
+asset** and the **verifiable attestation** that make private-to-public settlement possible.
 
 ---
 
-## 8. What was newly built during the program
+## 8. What was newly built, ported, integrated, or improved during the program
 
-**Everything was built from scratch for this hackathon:**
+**Everything was built from scratch for this hackathon — nothing was ported:**
 
-- **Smart contracts** — `SealedBidAuction` (commit–reveal sealed bids), `HushWireVault`
-  (verifier-gated atomic escrow), `IEnclaveVerifier` + `MockEnclaveVerifier`/`MockRejectingVerifier`,
-  `MockFAsset` (testnet FXRP).
-- **`@hushwire/sdk`** — `HushWireClient`: a signer-aware agent client that hides the commit–reveal
-  cryptography (salt generation + storage) and exposes `openRound / commitBid / revealBid / settle /
-  escrow / execute / refund` plus chain-time-aware phase waiting.
-- **`@hushwire/keeper`** — an idempotent automation service with three strategies
-  (`SettlementExecutor`, `RefundProtector`, `AutoSettler`) that auto-executes settlements and recovers
-  expired escrow.
-- **MCP server** — exposes HushWire as 9 agent-callable tools (the agent-economy integration layer).
-- **Web console** — live dashboard reading on-chain state via a server-side `/api/chain` route.
-- **`examples/two-agents.ts`** — a verified end-to-end autonomous negotiation on Coston2.
-
-Nothing was ported; all of it is new.
+- **Smart contracts (v2)** — `SealedBidAuction` (commit–reveal sealed bids, **escrowed bids**,
+  creator-bid ban, permissionless settle after a deadline, **`settleAndPay`** — atomic
+  attestation-gated settle + release, and **`recover`** — hostage protection refunding bidder escrows
+  if the creator never settles), `HushWireVault` (verifier-gated atomic escrow), `SignatureVerifier`
+  (real EIP-191 attestation over exact terms), `IEnclaveVerifier` + test mocks, `MockFAsset`.
+- **`@hushwire/sdk`** — `HushWireClient` hiding the commit–reveal cryptography with **crash-safe salt
+  storage** (`JsonFileCommitmentStore` with optional AES-256-GCM at rest, browser
+  `LocalStorageCommitmentStore`), exposing `openRound / commitBid / revealBid / escrowBid / getWinner /
+  settle / settleAndPay / escrow / execute / recover / refund`.
+- **`@hushwire/keeper`** — idempotent automation (settlement execution, refund protection,
+  auto-settle/recover after deadlines).
+- **MCP server** — 9 agent-callable tools over stdio.
+- **Web console** — landing page with a **live on-chain event feed** (decoded Vault/Auction logs with
+  block numbers + explorer links), settlement console, and negotiation simulation page.
+- **`examples/two-agents.ts`** — verified end-to-end autonomous negotiation on Coston2, including a
+  crash-recovery beat (bids revealed from persisted salts after a simulated process restart).
 
 ---
 
@@ -109,26 +123,31 @@ Deployed on **Flare Coston2** (chain ID **114**) — Explorer: https://coston2-e
 
 | Contract | Address |
 |----------|---------|
-| MockFAsset (FXRP) | `0xed0b4da8513bd767B693122b4A53Cf4f903ee633` |
-| SealedBidAuction | `0x472098a25E85D1f99373ea2D8161d30bFc921bB1` |
-| HushWireVault | `0xBb45952B02D034600B5355FA67794B6980334fc2` |
-| SignatureVerifier (authority = deployer) | `0x381f654BA74e7F18B320A355Cca8A339d8f9d120` |
+| MockFAsset (FXRP) | `0x8d0E895eC10EBfaaC4C13f48862C4A25177B49fE` |
+| SealedBidAuction | `0xCc68Ae95D2Bb23Ffed211e39287228939dA6e8e8` |
+| HushWireVault | `0xeaC96028664f15719586bc4290f94a664Fa1805F` |
+| SignatureVerifier (authority = deployer) | `0xd316fB982AB5630d3139D058853f25DB81B47146` |
 
-> ⚠️ The `SignatureVerifier` is an **authority-based verifier** (deployer = authority) that performs real EIP-191 signature verification over exact settlement terms. On mainnet, rotate `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier (a Flare Compute Extension), and replace `MockFAsset` with the real FAsset ERC20.
+> ⚠️ The `SignatureVerifier` is an **authority-based verifier** (deployer = authority) that performs
+> real EIP-191 signature verification over exact settlement terms. On mainnet, rotate
+> `HushWireVault.setVerifier()` to Flare Confidential Compute's real attestation verifier (a Flare
+> Compute Extension) and replace `MockFAsset` with the real FAsset ERC20.
 
 ---
 
-## 10. Roadmap / next steps
+## 10. Short roadmap / next steps
 
-1. **Production verifier (FCC/FCE)** — build the HushWire **Flare Compute Extension** that verifies
-   mutual agreement inside a TEE and signs the attestation; wire the keeper's `proofProvider` to the
-   TEE Proxy; rotate via `setVerifier()`. (Blocked only on Flare publishing the FCC API — currently
-   pre-production.)
+1. **Production verifier (FCC/FCE)** — deploy the HushWire **Flare Compute Extension** so the TEE
+   performs the attestation; wire the keeper's proof provider to the TEE Proxy; rotate via
+   `setVerifier()`. (Blocked only on Flare publishing the FCC API — currently pre-production.)
 2. **Real FAsset settlement** — settle in mainnet **FXRP** via the FAssetManager system.
-3. **Encrypted commitment store** — encrypt salts at rest (the in-memory store is demo-only).
+3. **Agent adapters** — x402 (HTTP 402) payment handler; agent-framework integrations.
 4. **WebSocket subscriptions** — replace keeper/dashboard polling with event streams.
-5. **Agent adapters** — x402 (HTTP 402) payment handler; framework integrations.
-6. **Mainnet deployment** + monitoring/metrics for the keeper.
+5. **Multi-asset support** — FBTC, FDOGE, and other FAssets as settlement tokens.
+6. **Mainnet deployment** + keeper monitoring/metrics.
+
+*Already shipped this program:* crash-safe encrypted salt storage, atomic `settleAndPay`,
+bidder escrows + `recover`, permissionless settle, live on-chain event feed.
 
 ---
 
@@ -136,12 +155,13 @@ Deployed on **Flare Coston2** (chain ID **114**) — Explorer: https://coston2-e
 
 - **Deployed on Coston2:** ✅ Yes — all contracts live and exercised on Coston2 (chain 114).
   Not yet on Songbird or Flare Mainnet.
-- **Testing:** ✅ 26/26 contract tests passing; a full negotiation → settlement verified **on-chain**;
-  the MCP server's handshake **and** a real tool call (`get_status`) verified end-to-end.
-- **Early usage / traction:** 🟡 Early. The on-chain demo activity (sealed rounds + executed
-  settlements) is real and inspectable on the explorer. Concrete user-acquisition is the next focus:
-  outreach via the Flare Hackathon Telegram group and agent-framework communities to get pilot users
-  running negotiations through the MCP server.
+- **Testing:** ✅ 42/42 contract tests passing; a full negotiation → settlement verified **on-chain**
+  (single-tx `settleAndPay`); the MCP server's handshake **and** a real tool call (`get_status`)
+  verified end-to-end.
+- **Early usage / traction:** 🟡 Early. The on-chain demo activity (sealed rounds, escrowed bids,
+  executed settlements) is real and inspectable on the explorer. Concrete user-acquisition is the
+  next focus: outreach via the Flare Hackathon Telegram group and agent-framework communities to get
+  pilot users running negotiations through the MCP server.
 
 ---
 

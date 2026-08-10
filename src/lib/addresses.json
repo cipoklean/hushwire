@@ -2,10 +2,10 @@
   "network": "coston2",
   "chainId": 114,
   "rpcUrl": "https://coston2-api.flare.network/ext/C/rpc",
-  "fxrpToken": "0xed0b4da8513bd767B693122b4A53Cf4f903ee633",
-  "signatureVerifier": "0x381f654BA74e7F18B320A355Cca8A339d8f9d120",
-  "sealedBidAuction": "0x472098a25E85D1f99373ea2D8161d30bFc921bB1",
-  "hushWireVault": "0xBb45952B02D034600B5355FA67794B6980334fc2",
-  "deployedBlock": 33837657,
-  "deployedAt": "2026-08-09T23:02:40.951Z"
+  "fxrpToken": "0x8d0E895eC10EBfaaC4C13f48862C4A25177B49fE",
+  "signatureVerifier": "0xd316fB982AB5630d3139D058853f25DB81B47146",
+  "sealedBidAuction": "0xCc68Ae95D2Bb23Ffed211e39287228939dA6e8e8",
+  "hushWireVault": "0xeaC96028664f15719586bc4290f94a664Fa1805F",
+  "deployedBlock": 33838947,
+  "deployedAt": "2026-08-09T23:45:54.880Z"
 }

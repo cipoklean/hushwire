@@ -28,8 +28,8 @@ const PHASES = [
     name: "SETTLE",
     color: "#35d07f",
     title: "Atomic FAsset release.",
-    body: "HushWireVault releases escrowed FXRP atomically the moment a valid attestation lands. Gated by the verifier — no privileged party can force a release. No partial fills.",
-    code: "vault.execute(settlementId, attestation)",
+    body: "settleAndPay settles the round and releases escrowed FXRP in a single transaction, gated by a valid attestation over the exact terms. Invalid attestation → the whole tx reverts: no settlement, no release. No partial fills.",
+    code: "auction.settleAndPay(roundId, settlementId, attestation)",
   },
 ];
 

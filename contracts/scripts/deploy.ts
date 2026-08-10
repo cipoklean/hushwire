@@ -20,17 +20,18 @@ async function main() {
   await verifier.waitForDeployment();
   console.log("SignatureVerifier (authority = deployer):", await verifier.getAddress());
 
-  // --- 3. Deploy SealedBidAuction ---
-  const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
-  const auction = await SealedBidAuction.deploy();
-  await auction.waitForDeployment();
-  console.log("SealedBidAuction:", await auction.getAddress());
-
-  // --- 4. Deploy HushWireVault (gated by the SignatureVerifier) ---
+  // Deploy HushWireVault gated by the verifier (vault first — the auction
+  // needs its address for settleAndPay)
   const HushWireVault = await ethers.getContractFactory("HushWireVault");
   const vault = await HushWireVault.deploy(await verifier.getAddress());
   await vault.waitForDeployment();
   console.log("HushWireVault:", await vault.getAddress());
+
+  // --- 4. Deploy SealedBidAuction (needs the vault for atomic settleAndPay) ---
+  const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
+  const auction = await SealedBidAuction.deploy(await vault.getAddress());
+  await auction.waitForDeployment();
+  console.log("SealedBidAuction:", await auction.getAddress());
 
   // --- Summary ---
   const network = await ethers.provider.getNetwork();

@@ -22,15 +22,16 @@ describe("HushWire Protocol", function () {
     verifier = await MockEnclaveVerifier.deploy();
     await verifier.waitForDeployment();
 
-    // Deploy SealedBidAuction
-    const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
-    auction = await SealedBidAuction.deploy();
-    await auction.waitForDeployment();
-
-    // Deploy HushWireVault gated by the verifier
+    // Deploy HushWireVault gated by the verifier (vault first — the auction
+    // needs its address for atomic settleAndPay)
     const HushWireVault = await ethers.getContractFactory("HushWireVault");
     vault = await HushWireVault.deploy(await verifier.getAddress());
     await vault.waitForDeployment();
+
+    // Deploy SealedBidAuction
+    const SealedBidAuction = await ethers.getContractFactory("SealedBidAuction");
+    auction = await SealedBidAuction.deploy(await vault.getAddress());
+    await auction.waitForDeployment();
 
     // Distribute FXRP to agents
     await fxrp.transfer(agentA.address, ethers.parseEther("10000"));
@@ -158,6 +159,13 @@ describe("HushWire Protocol", function () {
       await time.increase(61);
       await auction.connect(agentB).revealBid(0, amountB, saltB);
       await auction.connect(agentC).revealBid(0, amountC, saltC);
+
+      // Bidders back their revealed bids (only funded bids are eligible to win)
+      await fxrp.connect(agentB).approve(await auction.getAddress(), amountB);
+      await auction.connect(agentB).escrowBid(0);
+      await fxrp.connect(agentC).approve(await auction.getAddress(), amountC);
+      await auction.connect(agentC).escrowBid(0);
+
       await time.increase(61);
 
       await auction.connect(agentA).settle(0);
@@ -166,6 +174,10 @@ describe("HushWire Protocol", function () {
       expect(a.settled).to.be.true;
       expect(a.winner).to.equal(agentC.address);
       expect(a.winningBid).to.equal(amountC);
+
+      // Escrows are refunded at settle
+      expect(await fxrp.balanceOf(agentB.address)).to.equal(ethers.parseEther("10000"));
+      expect(await fxrp.balanceOf(agentC.address)).to.equal(ethers.parseEther("10000"));
     });
   });
 

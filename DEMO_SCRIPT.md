@@ -14,7 +14,7 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 4. **Open these tabs in advance** (so you just switch tabs, no typing on camera):
    - `http://localhost:3000` (landing)
    - `http://localhost:3000/dashboard` (console)
-   - `https://coston2-explorer.flare.network` (explorer — keep a settlement tx ready: `0xeaf51d35e4bc16ed512aba798a7e0b798a7e9da49693d0088d274db2b8ab0f57`, or run `npm run sdk:example` and use the latest `SETTLEMENT EXEC` tx from the landing feed)
+   - `https://coston2-explorer.flare.network` (explorer — keep a settlement tx ready: `0xf9c62e13a36a5b5860d7e09e8fc21d432cbcd276b99b9dbf5695274d170ed7a7` — the settleAndPay tx: round settle + payment + escrow refunds in ONE tx; or run `npm run sdk:example` and grab the latest `SETTLEMENT EXEC` from the landing feed)
    - a terminal showing the pre-recorded `sdk:example` clip
    - `mcp/README.md` (or a terminal showing the MCP `tools/list` output)
 5. Hide bookmarks bar, close notifications, use a clean desktop.
@@ -23,8 +23,8 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 
 ## Scene 1 — Hook · 0:00–0:12 (12s)
 
-- **On screen:** Landing page (`localhost:3000`) — the "NEGOTIATE IN THE DARK / SETTLE IN THE LIGHT"
-  headline with the live intercept feed animating on the right.
+- **On screen:** Landing page (`localhost:3000`) — the "PRIVATE NEGOTIATIONS / PUBLIC SETTLEMENT"
+  headline (punchline: "Settlement public. Strategy sealed.") with the live event feed on the right.
 - **Navigate:** just land on the tab; let the feed animate.
 - **Say:**
   > "This is HushWire. It lets AI agents negotiate a price in private, then settle the payment
@@ -51,7 +51,7 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
   1. Switch to the dashboard tab. Pause on the stat row (ROUNDS / SETTLEMENTS / VOLUME).
   2. Hover the **Recent Rounds** and **Settlement Ledger** rows.
   3. **Click a payer or payee address** in the ledger → it opens the **Flare explorer**.
-  4. On the explorer, show the transaction: `0xe27d354c4fba82d4a8b81e8f7c9d4b5a3c2f1e6d8a9b7c5e4f3a2b1c0d9e8f7` (1020 FXRP, executed, SignatureVerifier authority signature).
+  4. On the explorer, show the transaction: `0xf9c62e13a36a5b5860d7e09e8fc21d432cbcd276b99b9dbf5695274d170ed7a7` (1020 FXRP — the round settles, the payment releases, and both bidder escrows refund in this single tx, SignatureVerifier authority signature).
 - **Say:**
   > "This console reads live state from Flare's Coston2 testnet — these aren't mock numbers, every row
   > is a real transaction. Click any address and you're on the Flare explorer: here's the actual
@@ -68,11 +68,13 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
   `examples/two-agents.ts` for a faster live take.)
 - **Say (time it to the clip):**
   > "Watch a full negotiation run itself. Agent A opens a sealed round. Agents B and C commit hidden
-  > bids — only a hash goes on-chain, the amounts are sealed. After the window, they reveal. Agent A
-  > settles — the winner is C at 1020 FXRP — and escrows the funds.
-  > And here's the key part: the **keeper automatically executes the settlement with a real authority
-  > signature.** The SignatureVerifier checks the exact terms on-chain — no mock, real cryptographic
-  > verification. Autonomous, end to end, on Flare."
+  > bids — only a hash goes on-chain, the amounts are sealed. After the window, they reveal. There's
+  > even a simulated process crash — the agents restart and reveal their bids from encrypted salts on
+  > disk. Then both sellers back their bids by escrowing the amounts.
+  > Agent A reads the winner — C at 1020 FXRP — and escrows the payment. And here's the key part: the
+  > authority signs the exact terms, and settleAndPay settles the round and releases the funds in
+  > ONE transaction — a real EIP-191 signature checked on-chain by the SignatureVerifier. No mock,
+  > real cryptographic verification. Autonomous, end to end, on Flare."
 
 ---
 
@@ -95,9 +97,10 @@ Target length: **3:12** (cap 3:20). Record voiceover separately if that's easier
 - **Navigate:** switch to landing, or cut to a 2-bullet slide.
 - **Say:**
   > "Two Flare primitives make this possible. **FXRP** — a Flare FAsset — is the settlement asset,
-  > bringing XRP value into smart contracts. And **Flare Confidential Compute** is the verification
-  > layer: an enclave confirms both parties agreed, without revealing the terms. Remove either and the
-  > product breaks."
+  > bringing XRP value into smart contracts. And **Flare Confidential Compute** is the production
+  > verification layer: a TEE will attest both parties agreed, without revealing the terms. Today the
+  > attestation is operator-signed EIP-191, and the verifier interface already matches the FCC
+  > shielded-transfer pattern. Remove either primitive and the product breaks."
 
 ---
 

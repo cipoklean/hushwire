@@ -1,5 +1,10 @@
 export { HushWireClient } from "./client";
-export { makeCommitment, MemoryCommitmentStore } from "./commitment";
+export {
+  makeCommitment,
+  MemoryCommitmentStore,
+  JsonFileCommitmentStore,
+  LocalStorageCommitmentStore,
+} from "./commitment";
 export type { CommitmentStore, CommitmentRecord } from "./commitment";
 export { AUCTION_ABI, VAULT_ABI, FASSET_ABI, VERIFIER_ABI } from "./abi";
 export type {

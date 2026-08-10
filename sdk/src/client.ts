@@ -109,12 +109,62 @@ export class HushWireClient {
     return { txHash: receipt!.hash, amount: rec.amount };
   }
 
-  /** Settle the round (creator only). Returns the winner and winning amount. */
+  /** Settle the round (creator only, after the reveal window). Returns the winner and winning amount. */
   async settle(roundId: number): Promise<{ txHash: string; winner: string; amount: bigint }> {
     const tx = await this.auction.settle(roundId);
     const receipt = await tx.wait();
     const a = await this.auction.auctions(roundId);
     return { txHash: receipt!.hash, winner: a.winner, amount: a.winningBid };
+  }
+
+  /** Back a revealed bid by escrowing its amount (only funded bids can win). */
+  async escrowBid(roundId: number): Promise<{ txHash: string; amount: bigint }> {
+    const bidder = await this.signer.getAddress();
+    const rec = await this.store.load(roundId, bidder);
+    if (!rec) throw new Error(`No stored commitment for round ${roundId} / ${bidder}`);
+    const me = await this.signer.getAddress();
+    const allowance: bigint = await this.fasset.allowance(me, this.contracts.auction);
+    if (allowance < rec.amount) {
+      const tx = await this.fasset.approve(this.contracts.auction, rec.amount);
+      await tx.wait();
+    }
+    const tx = await this.auction.escrowBid(roundId);
+    const receipt = await tx.wait();
+    return { txHash: receipt!.hash, amount: rec.amount };
+  }
+
+  /** Read the current winner off-chain (no state change). */
+  async getWinner(roundId: number): Promise<{ winner: string; amount: bigint }> {
+    const [winner, amount] = await this.auction.getWinner(roundId);
+    return { winner, amount };
+  }
+
+  /**
+   * ATOMIC settle + pay: settles the round and releases the escrowed payment
+   * from the vault in the SAME transaction, gated by a valid attestation.
+   * Permissionless — anyone can submit the attestation.
+   */
+  async settleAndPay(
+    roundId: number,
+    settlementId: number,
+    attestation: ethers.BytesLike
+  ): Promise<{ txHash: string; winner: string; amount: bigint }> {
+    const tx = await this.auction.settleAndPay(roundId, settlementId, attestation);
+    const receipt = await tx.wait();
+    const a = await this.auction.auctions(roundId);
+    return { txHash: receipt!.hash, winner: a.winner, amount: a.winningBid };
+  }
+
+  /** Hostage protection: refunds all bidder escrows if the creator never settled. */
+  async recover(roundId: number): Promise<string> {
+    const tx = await this.auction.recover(roundId);
+    const receipt = await tx.wait();
+    return receipt!.hash;
+  }
+
+  /** Deadline after which anyone may settle or recover a round. */
+  async getSettleDeadline(roundId: number): Promise<number> {
+    return Number(await this.auction.settleDeadline(roundId));
   }
 
   // ── Settlement (HushWireVault) ────────────────────────────────────────────
