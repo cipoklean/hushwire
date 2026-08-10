@@ -30,3 +30,6 @@ contracts/typechain-types/
 
 # Agent commit salts (crash-safe store)
 .hushwire-salts-*.json
+
+SUBMISSION.md
+DEMO_SCRIPT.md
