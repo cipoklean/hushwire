@@ -1,7 +1,8 @@
 # FCC / FCE Integration Research
 
-<!-- SERVED COPY — source of truth: docs/FCC_INTEGRATION.md. Keep in sync when
-     editing the source (the landing page links here). -->
+<!-- SOURCE OF TRUTH for the served copy at public/docs/FCC_INTEGRATION.md
+     (https://hushwire-eight.vercel.app/docs/FCC_INTEGRATION.md). Edit here,
+     then copy to public/docs/FCC_INTEGRATION.md so the live link stays in sync. -->
 
 Research from the Flare Developer Hub guides + GitHub (fetched during the Summer Signal build, July 2026).
 Status caveat from the docs: *"Flare Confidential Compute is in the final stages of development and is
